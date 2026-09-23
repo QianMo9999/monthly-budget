@@ -51,3 +51,22 @@ test('app.js 只通过全局 BudgetCore 使用核心逻辑', () => {
   assert.ok(app.includes('window.BudgetCore'), 'app.js 应从 window.BudgetCore 取核心逻辑');
   assert.ok(!/require\(/.test(app), 'app.js 不应该依赖 CommonJS');
 });
+
+// 之前有个真 bug：「删除这笔付款」按钮只写了 data-delete-payment，
+// 但弹层事件只分发 [data-action]，于是点了没反应。这条检查拦的就是这类错误。
+test('每个 data-* 属性都必须被代码读取（否则就是点了没反应）', () => {
+  const attributes = new Set(matchAll(app, /(data-[a-z-]+)="/g));
+  const unread = [...attributes].filter(name => {
+    const readers = [
+      'getAttribute(\'' + name + '\')',
+      'hasAttribute(\'' + name + '\')',
+      'closest(\'[' + name,
+      'querySelector(\'[' + name,
+      'querySelectorAll(\'[' + name,
+      '[' + name + '=',
+      '[' + name + ']'
+    ];
+    return !readers.some(reader => app.includes(reader));
+  });
+  assert.deepEqual(unread, [], '这些属性只写进了 HTML，但没有代码读取它：' + unread.join(', '));
+});

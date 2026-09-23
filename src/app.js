@@ -1063,7 +1063,8 @@
           '<div class="day-date">' + (when.getMonth() + 1) + '月' + when.getDate() + '日 付款' +
           (payment.note ? ' · ' + esc(payment.note) : '') + '</div>' +
           '<div class="day-plan">' + Money.format(payment.amount) + '</div>' +
-          '<div class="day-actual"><button class="mini-btn ghost" data-delete-payment="' + payment.id + '">删除这笔</button></div>' +
+          '<div class="day-actual"><button class="mini-btn ghost" data-action="delete-payment" data-payment-id="' +
+          payment.id + '">删除这笔</button></div>' +
           '</div>';
       }).join('') + '</div></div>';
 
@@ -1655,8 +1656,8 @@
       }
       case 'delete-payment': {
         const itemId = sheetState.itemId;
-        const paymentNode = event.target.closest('[data-delete-payment]');
-        store.deleteItemPayment(itemId, paymentNode.getAttribute('data-delete-payment'), currentKey);
+        const paymentNode = event.target.closest('[data-payment-id]');
+        store.deleteItemPayment(itemId, paymentNode.getAttribute('data-payment-id'), currentKey);
         openPaymentSheet(itemId);
         render();
         toast('已删除这笔付款');
@@ -2140,6 +2141,21 @@
       check('没付完就不算完成', store.item(buildItem.id, currentKey).status === 'planned');
       check('列表显示「部分已付」', rowText().includes('部分已付'));
       check('列表显示还差多少', rowText().includes('还差'));
+
+      // 删除付款记录（之前这里有 bug：按钮没接上事件，点了没反应）
+      $('listArea').querySelector('[data-pay="' + buildItem.id + '"]').click();
+      check('付款面板能看到付款记录', !!$('sheet').querySelector('[data-payment-id]'));
+      $('sheet').querySelector('[data-payment-id]').click();
+      check('删除这笔付款后已付归零',
+        core.itemPaymentsTotal(store.item(buildItem.id, currentKey)) === 0,
+        String(core.itemPaymentsTotal(store.item(buildItem.id, currentKey))));
+      closeSheet();
+      render();
+      check('删掉付款后列表回到「计划中」', rowText().includes('计划中'));
+
+      $('listArea').querySelector('[data-pay="' + buildItem.id + '"]').click();
+      $('payment-amount').value = '1000';
+      $('sheet').querySelector('[data-action="save-payment"]').click();
 
       $('listArea').querySelector('[data-pay="' + buildItem.id + '"]').click();
       check('第二笔预填剩余 2000', $('payment-amount').value === '2000', $('payment-amount').value);
