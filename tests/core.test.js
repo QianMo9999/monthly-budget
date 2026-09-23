@@ -282,6 +282,19 @@ test('Store：上月结转、手动覆盖、关闭开关、复制预算', () => 
   assert.equal(store.carryOver({ year: 2026, month: 6 }), 0, '中间月份缺失时不跨月结转');
   assert.equal(store.carryOver({ year: 2026, month: 5 }), store.summary(APRIL).actualBalance);
 
+  // 关掉自动结转后，手动填的金额仍然要生效（之前的 bug 是把两者一起忽略了）
+  store.setCarryOverEnabled(false);
+  assert.equal(store.carryOver(APRIL), 0, '关掉开关且没手填 → 0');
+  store.setCarryOverOverride(1500, APRIL);
+  assert.equal(store.carryOver(APRIL), 1500, '关掉开关但手动填了 → 按手动填的算');
+  assert.equal(store.summary(APRIL).carryOver, 1500);
+  assert.equal(store.summary(APRIL).actualBalance, 8000 + 1500);
+  store.setCarryOverOverride(0, APRIL);
+  assert.equal(store.carryOver(APRIL), 0, '手动填 0 就是 0');
+  store.setCarryOverOverride(null, APRIL);
+  store.setCarryOverEnabled(true);
+  assert.equal(store.carryOver(APRIL), marchBalance, '恢复自动结转');
+
   assert.equal(store.copyItemsFrom(MARCH, APRIL), 1);
   assert.deepEqual(store.items(APRIL).map(i => i.name), ['房租']);
   assert.equal(store.items(APRIL)[0].status, 'planned', '复制过来的是计划中');

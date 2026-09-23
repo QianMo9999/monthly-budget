@@ -14,7 +14,7 @@
   'use strict';
 
   /** App 版本号：改了功能就 +1，设置里能看到，用来确认线上是否已更新 */
-  const VERSION = 'v1.4.1';
+  const VERSION = 'v1.4.3';
 
   // ---------------------------------------------------------------- 金额
   // 内部一律按“分”做整数运算，避免 0.1 + 0.2 这类浮点误差。
@@ -914,13 +914,15 @@
       // ---- 结转与汇总
 
       carryOver(key, visited, now) {
-        if (!state.settings.carryOverEnabled) return 0;
         const seen = visited || [];
         if (seen.some(function (k) { return Month.equals(k, key); })) return 0;
         const month = findMonth(key);
+        // 手动填的结转金额永远优先，跟「自动结转」开关无关
         if (month && month.carryOverOverride !== null && month.carryOverOverride !== undefined) {
           return Money.round(month.carryOverOverride);
         }
+        // 关掉自动结转就不再自动带上一月的结余（手动填的上面已经处理了）
+        if (!state.settings.carryOverEnabled) return 0;
         const previous = Month.prev(key);
         if (!findMonth(previous)) return 0;
         return summarize(

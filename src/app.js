@@ -686,6 +686,7 @@
     $('sheet').innerHTML = '<div class="sheet-grabber"></div>' + html;
     $('sheet').classList.remove('hidden');
     $('backdrop').classList.remove('hidden');
+    lockBodyScroll();
   }
 
   function closeSheet() {
@@ -693,6 +694,24 @@
     $('sheet').classList.add('hidden');
     $('backdrop').classList.add('hidden');
     $('sheet').innerHTML = '';
+    unlockBodyScroll();
+  }
+
+  // 弹层打开时锁住背后的页面，避免「滑动小页面却把主页面带着滚」
+  let lockedScrollY = 0;
+
+  function lockBodyScroll() {
+    if (document.body.classList.contains('sheet-open')) return;
+    lockedScrollY = window.scrollY || window.pageYOffset || 0;
+    document.body.style.top = '-' + lockedScrollY + 'px';
+    document.body.classList.add('sheet-open');
+  }
+
+  function unlockBodyScroll() {
+    if (!document.body.classList.contains('sheet-open')) return;
+    document.body.classList.remove('sheet-open');
+    document.body.style.top = '';
+    window.scrollTo(0, lockedScrollY);
   }
 
   function categoryChips(selected, name) {
@@ -1233,7 +1252,8 @@
       '<input id="carry-input" type="text" inputmode="decimal" placeholder="留空 = 自动使用上月结余" value="' +
       (month.carryOverOverride === null || month.carryOverOverride === undefined ? '' : esc(Money.plain(month.carryOverOverride))) + '">' +
       '<div class="hint">自动结转当前为：' + (store.settings.carryOverEnabled ? '开启' : '关闭') +
-      '，自动值 ' + Money.format(store.carryOver(currentKey) || 0) + '</div></div>' +
+      '，自动值 ' + Money.format(store.carryOver(currentKey) || 0) +
+      '。手动填了金额就以你填的为准（即使自动结转是关闭的）。</div></div>' +
       '<div class="field"><label>本月备注（可选）</label>' +
       '<input id="month-note" type="text" value="' + esc(month.note) + '"></div>' +
       '<div class="sheet-actions">' +
@@ -1899,6 +1919,20 @@
       const overflow = document.documentElement.scrollWidth - window.innerWidth;
       check(label + ' 没有横向溢出', overflow <= 1, '超出 ' + overflow + 'px');
     }
+    /** 输入框（尤其 iOS 的日期框）右边框不能被顶出屏幕 */
+    function checkInputsInside(label, root) {
+      const nodes = (root || document).querySelectorAll('input');
+      let worst = 0;
+      Array.prototype.forEach.call(nodes, function (node) {
+        const rect = node.getBoundingClientRect();
+        if (rect.width === 0) return;
+        worst = Math.max(worst, rect.right - window.innerWidth);
+      });
+      check(label + ' 的输入框没有超出屏幕', worst <= 0.5, '超出 ' + Math.round(worst) + 'px');
+    }
+    function checkBodyLocked(label) {
+      check(label + ' 打开时锁住了背景页面', document.body.classList.contains('sheet-open'));
+    }
 
     try {
       results.push('INFO  视口 ' + window.innerWidth + 'x' + window.innerHeight + ' dpr=' + window.devicePixelRatio);
@@ -1919,6 +1953,8 @@
       click('fab');
       check('点＋打开新增预算表单', !$('sheet').classList.contains('hidden'));
       checkNoOverflow('新增预算面板');
+      checkInputsInside('新增预算面板', $('sheet'));
+      checkBodyLocked('新增预算面板');
       $('item-name').value = '房租';
       $('item-amount').value = '2500';
       $('sheet').querySelector('[data-chip-value="housing"]').click();
@@ -1939,17 +1975,21 @@
 
       click('tab-ledger');
       click('fab');
+      checkNoOverflow('记账面板');
+      checkInputsInside('记账面板', $('sheet'));
       $('entry-title').value = '奶茶';
       $('entry-amount').value = '18.5';
       $('entry-date').value = '2026-03-03';
       $('sheet').querySelector('[data-action="save-entry"]').click();
-      checkNoOverflow('记账面板');
       check('记一笔后出现在列表', rowText().includes('奶茶'));
       check('记账合计 18.5', store.summary(currentKey).ledgerTotal === 18.5);
       check('记账后结余 5581.5', store.summary(currentKey).actualBalance === 5581.5, String(store.summary(currentKey).actualBalance));
 
       click('tab-advance');
       click('fab');
+      checkNoOverflow('预支面板');
+      checkInputsInside('预支面板', $('sheet'));
+      checkBodyLocked('预支面板');
       check('预支表单说明是「提前支付下个月」', $('sheet').textContent.includes('下个月会自动带一笔'));
       $('advance-title').value = '下个月的车票';
       $('advance-amount').value = '700';
@@ -1960,7 +2000,6 @@
       check('归属月份可以改', $('advance-target-label').textContent === Month.label(Month.next(Month.next(currentKey))));
       $('sheet').querySelector('[data-target-step="-1"]').click();
       $('sheet').querySelector('[data-action="save-advance"]').click();
-      checkNoOverflow('预支面板');
       check('新增预支成功', store.advances(currentKey).length === 1);
       check('预支从本月扣钱', store.summary(currentKey).actualBalance === 5581.5 - 700,
         Money.plain(store.summary(currentKey).actualBalance));
@@ -1984,6 +2023,7 @@
       click('openSettings');
       check('设置面板打开', !$('sheet').classList.contains('hidden'));
       checkNoOverflow('设置面板');
+      checkInputsInside('设置面板', $('sheet'));
       $('sheet').querySelector('[data-action="export-csv"]').click();
       const csv = store.exportCSV();
       check('CSV 含预算行', csv.includes('2026年3月,预算,房租,居住,2500.00,2400.00,部分已付'));
@@ -2002,7 +2042,27 @@
       check('固定文件名备份也会记录备份时间', !!store.settings.lastBackupAt);
       $('sheet').querySelector('[data-action="close"]').click();
 
+      // —— 关闭自动结转后，手动填的结转金额仍然要计入当月 ——
+      click('openSettings');
+      $('sheet').querySelector('[data-toggle="carry-over"]').click();
+      check('可以关闭自动结转', store.settings.carryOverEnabled === false);
+      $('sheet').querySelector('[data-action="close"]').click();
+      const beforeManualCarry = store.summary(currentKey).actualBalance;
+      click('hero');
+      check('打开收入与结转面板', !!$('carry-input'));
+      $('carry-input').value = '1234';
+      $('sheet').querySelector('[data-action="save-income"]').click();
+      check('关闭自动结转后，手动填的结转会计入当月',
+        store.summary(currentKey).carryOver === 1234, Money.plain(store.summary(currentKey).carryOver));
+      check('手动结转也算进结余',
+        Money.cents(store.summary(currentKey).actualBalance) === Money.cents(beforeManualCarry) + 123400,
+        Money.plain(beforeManualCarry) + ' → ' + Money.plain(store.summary(currentKey).actualBalance));
+      store.setCarryOverOverride(null, currentKey);
+      store.setCarryOverEnabled(true);
+      render();
+
       click('nextMonth');
+      check('关闭弹层后背景解除锁定', !document.body.classList.contains('sheet-open'));
       check('切到 4 月', $('monthLabel').textContent === '2026年4月', $('monthLabel').textContent);
       // 3 月：收入 8000 − 房租 2400 − 奶茶 18.5 − 提前支付的车票未收回 500 = 5081.5
       check('4 月自动结转 5081.5', store.summary(currentKey).carryOver === 5081.5, String(store.summary(currentKey).carryOver));
@@ -2027,6 +2087,7 @@
       $('sheet').querySelector('[data-mode="daily"]').click();
       check('切到按天重复模式', !!$('item-people') && !!$('item-preview'));
       checkNoOverflow('新增预算面板（按天重复）');
+      checkInputsInside('新增预算面板（按天重复）', $('sheet'));
       check('默认两个人两个金额输入框', $('sheet').querySelectorAll('[data-person-amount]').length === 2);
       $('sheet').querySelector('[data-people="1"]').click();
       check('加一个人变成三个输入框', $('sheet').querySelectorAll('[data-person-amount]').length === 3);

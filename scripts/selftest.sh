@@ -11,7 +11,9 @@ TAB="${TAB:-budget}"
 MONTH="${MONTH:-}"
 MODE="${MODE:-http}"
 CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-SHOT="${1:-/tmp/budget-web-screenshot.png}"
+SHOT_FILE="${1:-/tmp/budget-web-screenshot.png}"
+DO_SHOT="${SHOT:-}"       # 只有显式 SHOT=1 才截图
+SHOT_TAKEN=""
 
 if [ ! -x "$CHROME" ]; then
   echo "找不到 Chrome，跳过界面自检"
@@ -61,20 +63,23 @@ run_chrome "$PROFILE" --window-size="$WIDTH","$HEIGHT" --virtual-time-budget=300
 SHOT_QUERY="sample=1&tab=$TAB"
 if [ -n "$MONTH" ]; then SHOT_QUERY="$SHOT_QUERY&month=$MONTH"; fi
 
-run_chrome "$PROFILE_SHOT" --window-size="$WIDTH","$HEIGHT" --virtual-time-budget=4000 \
-  --screenshot="$SHOT" "$BASE_URL?$SHOT_QUERY" \
-  >/dev/null 2>>/tmp/budget-web-chrome.log
-
-# 如果指定了 SHEET，再截一张表单的图（例如 SHEET=item 看「按天重复」表单）
-if [ -n "${SHEET:-}" ]; then
+# 截图默认不做（每次都要单独启动一遍 Chrome，很慢）。需要时加 SHOT=1，或指定 SHEET=xxx
+if [ -n "$DO_SHOT" ] || [ -n "${SHEET:-}" ]; then
   run_chrome "$PROFILE_SHOT" --window-size="$WIDTH","$HEIGHT" --virtual-time-budget=4000 \
-    --screenshot="${SHOT%.png}-$SHEET.png" "$BASE_URL?sample=1&sheet=$SHEET" \
+    --screenshot="$SHOT_FILE" "$BASE_URL?$SHOT_QUERY" \
     >/dev/null 2>>/tmp/budget-web-chrome.log
+  SHOT_TAKEN="$SHOT_FILE"
+  if [ -n "${SHEET:-}" ]; then
+    run_chrome "$PROFILE_SHOT" --window-size="$WIDTH","$HEIGHT" --virtual-time-budget=4000 \
+      --screenshot="${SHOT_FILE%.png}-$SHEET.png" "$BASE_URL?sample=1&sheet=$SHEET" \
+      >/dev/null 2>>/tmp/budget-web-chrome.log
+    SHOT_TAKEN="$SHOT_TAKEN 和 ${SHOT_FILE%.png}-$SHEET.png"
+  fi
 fi
 
 # —— 离线验证：先等 Service Worker 装好，再把服务停掉，看页面还能不能打开 ——
 OFFLINE_RESULT=""
-if [ "$MODE" != "file" ]; then
+if [ "$MODE" != "file" ] && [ -z "${QUICK:-}" ]; then
   run_chrome "$PROFILE" --window-size="$WIDTH","$HEIGHT" --virtual-time-budget=5000 \
     --dump-dom "$BASE_URL?sample=1" > /dev/null 2>>/tmp/budget-web-chrome.log
   kill "$SERVER_PID" 2>/dev/null || true
@@ -93,7 +98,7 @@ PY
 )"
 fi
 
-python3 - "$SHOT" "$OFFLINE_RESULT" <<'PY'
+python3 - "$SHOT_TAKEN" "$OFFLINE_RESULT" <<'PY'
 import re, sys
 
 def unescape(text):
@@ -124,7 +129,8 @@ fails = [line for line in (phase1 + '\n' + (phase2 or '')).splitlines() if line.
 if offline and 'OFFLINE OK' not in offline:
     fails.append('断网后无法打开（离线缓存没生效）')
 print()
-print('截图：' + sys.argv[1])
+if sys.argv[1]:
+    print('截图：' + sys.argv[1])
 if fails:
     print('自检失败 %d 项' % len(fails))
     sys.exit(1)
