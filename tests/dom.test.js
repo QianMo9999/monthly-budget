@@ -1,0 +1,53 @@
+/*
+ * 界面接线检查：app.js 里引用的每个元素 id 都必须真的存在
+ * （静态写在 index.html 里，或者在 app.js 动态生成的模板里）。
+ * 这类拼写错误在浏览器里只会表现为「点了没反应」，所以用测试兜住。
+ */
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+
+const ROOT = path.join(__dirname, '..');
+const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+const app = fs.readFileSync(path.join(ROOT, 'src/app.js'), 'utf8');
+const css = fs.readFileSync(path.join(ROOT, 'src/styles.css'), 'utf8');
+
+function matchAll(text, regex, group) {
+  const result = [];
+  let match;
+  while ((match = regex.exec(text)) !== null) result.push(match[group || 1]);
+  return result;
+}
+
+test('index.html 引用的静态资源都存在', () => {
+  const sources = matchAll(html, /(?:src|href)="([^"]+)"/g);
+  assert.ok(sources.length >= 3, '至少引用 css 和两个 js');
+  sources.forEach(relative => {
+    assert.ok(fs.existsSync(path.join(ROOT, relative)), '缺少文件：' + relative);
+  });
+});
+
+test('app.js 引用的元素 id 都存在', () => {
+  const staticIds = new Set(matchAll(html, /id="([^"]+)"/g));
+  const dynamicIds = new Set(matchAll(app, /id="([^"]+)"/g));
+  const referenced = new Set(matchAll(app, /\$\('([^']+)'\)/g));
+
+  const missing = [...referenced].filter(id => !staticIds.has(id) && !dynamicIds.has(id));
+  assert.deepEqual(missing, [], '以下 id 在页面里找不到：' + missing.join(', '));
+});
+
+test('关键结构存在：底栏按钮、弹层、列表容器', () => {
+  ['fab', 'sheet', 'backdrop', 'listArea', 'heroValue', 'statTiles', 'progressFill', 'tab-budget', 'tab-ledger', 'tab-advance', 'toast', 'storageBanner']
+    .forEach(id => assert.ok(html.includes('id="' + id + '"'), 'index.html 缺少 #' + id));
+});
+
+test('样式里定义了基础布局类', () => {
+  ['hero', 'tile', 'row', 'chip', 'sheet', 'fab', 'toast', 'tab']
+    .forEach(className => assert.ok(css.includes('.' + className), 'styles.css 缺少 .' + className));
+});
+
+test('app.js 只通过全局 BudgetCore 使用核心逻辑', () => {
+  assert.ok(app.includes('window.BudgetCore'), 'app.js 应从 window.BudgetCore 取核心逻辑');
+  assert.ok(!/require\(/.test(app), 'app.js 不应该依赖 CommonJS');
+});
