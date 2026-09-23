@@ -940,6 +940,62 @@ test('预支：可以指定归属月份，也可以不给下个月', () => {
   assert.equal(store.summary(key).advanceIncomingTotal, 1200, '5 月才收到');
 });
 
+test('预支：付款日在未来时只占结余，不扣实际剩余', () => {
+  const store = createStore();
+  store.setIncome(8000, MARCH);
+  const now = new Date(2026, 2, 10, 12);          // 3 月 10 日
+  store.addAdvance({ title: '下个月的车票', amount: 700, date: day(2026, 3, 20) }, MARCH);
+
+  const before = store.summary(MARCH, now);
+  assert.equal(before.actualBalance, 8000, '钱还没付出去，实际剩余里要包含它');
+  assert.equal(before.plannedBalance, 7300, '但要先预留出来，不能算进结余');
+  assert.equal(before.advancePaidTotal, 0);
+  assert.equal(before.advanceReservedTotal, 700);
+  assert.equal(before.advanceOutstandingTotal, 700, '总占用还是 700');
+  assert.equal(before.totalSpending, 0, '还没真花，不算本月支出');
+
+  const after = store.summary(MARCH, new Date(2026, 2, 21, 12));   // 付款日之后
+  assert.equal(after.actualBalance, 7300, '过了付款日才真扣');
+  assert.equal(after.plannedBalance, 7300);
+  assert.equal(after.advancePaidTotal, 700);
+  assert.equal(after.advanceReservedTotal, 0);
+});
+
+test('预支：付款日在下下个月时，中间这个月也要继续预留', () => {
+  const store = createStore();
+  store.setIncome(8000, MARCH);
+  const now = new Date(2026, 2, 10, 12);
+  store.addAdvance({
+    title: '5 月的机票',
+    amount: 1200,
+    date: day(2026, 4, 20),
+    targetYear: 2026,
+    targetMonth: 5
+  }, MARCH);
+  store.ensureMonth(APRIL);
+
+  const march = store.summary(MARCH, now);
+  assert.equal(march.actualBalance, 8000, '3 月没真付钱');
+  assert.equal(march.plannedBalance, 6800, '3 月先预留 1200');
+
+  const april = store.summary(APRIL, now);
+  assert.equal(april.carryOver, 8000, '结转按实际剩余走，不受预留影响');
+  assert.equal(april.actualBalance, 16000, '4 月手里包含这 1200');
+  assert.equal(april.advanceReservedTotal, 1200, '4 月仍然要预留');
+  assert.equal(april.plannedBalance, 14800);
+  assert.equal(april.advanceIncomingTotal, 0, '还没付款，5 月先不转入');
+
+  // 付款日过去之后：3 月扣掉、4 月随之减少、5 月收到转入
+  const later = new Date(2026, 3, 25, 12);
+  assert.equal(store.summary(MARCH, later).actualBalance, 6800);
+  assert.equal(store.summary(APRIL, later).actualBalance, 14800, '钱确实少了');
+  store.ensureMonth({ year: 2026, month: 5 });
+  const may = store.summary({ year: 2026, month: 5 }, later);
+  assert.equal(may.advanceIncomingTotal, 1200, '5 月收到 3 月替它付掉的钱');
+  assert.equal(may.carryOver, 14800);
+  assert.equal(may.actualBalance, 8000 + 14800 + 1200);
+});
+
 // ---------------------------------------------------------------- 备份提醒
 
 // ---------------------------------------------------------------- 分次结算

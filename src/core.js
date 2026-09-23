@@ -14,7 +14,7 @@
   'use strict';
 
   /** App 版本号：改了功能就 +1，设置里能看到，用来确认线上是否已更新 */
-  const VERSION = 'v1.4.4';
+  const VERSION = 'v1.5.0';
 
   // ---------------------------------------------------------------- 金额
   // 内部一律按“分”做整数运算，避免 0.1 + 0.2 这类浮点误差。
@@ -346,6 +346,18 @@
     return Math.max(0, Money.round(advance.amount - advance.repaidAmount));
   }
 
+  /**
+   * 预支的付款日期到了没有：
+   * - 还没到（未来日期）→ 钱还在手里，只占结余（像计划中的预算，先预留）
+   * - 到了或已经过去 → 钱真的付出去了，实际剩余也要扣
+   */
+  function advanceIsPaid(advance, now) {
+    const when = new Date(advance.date);
+    if (!Number.isFinite(when.getTime())) return true;
+    const today = startOfDay(now || new Date()).getTime();
+    return startOfDay(when).getTime() <= today;
+  }
+
   function createMonth(input) {
     const now = new Date().toISOString();
     const data = input || {};
@@ -659,7 +671,7 @@
    *   两者之差 = 预算余额（计划 − 已付）
    *   超支 / 节省只做提示，不重复计入支出
    */
-  function summarize(month, carryOver, now, incomingAdvances) {
+  function summarize(month, carryOver, now, incomingAdvances, pendingReservations) {
     const reference = now || new Date();
     const items = month ? sortedItems(month) : [];
     const entries = month ? sortedEntries(month) : [];
@@ -679,11 +691,24 @@
     const ledgerIncomeTotal = Money.sum(incomeEntries.map(function (e) { return e.amount; }));
     const advanceTotal = Money.sum(advances.map(function (a) { return a.amount; }));
     const advanceRepaidTotal = Money.sum(advances.map(function (a) { return a.repaidAmount; }));
-    /* 本月提前付出去、还没收回的钱 */
+    /* 本月登记、还没收回的预支合计（含还没到付款日的） */
     const advanceOutstandingTotal = Money.sum(advances.map(advanceOutstanding));
-    /* 上个月替本月提前付掉的钱（归属本月的预支） */
+    /* 已经真的付出去了（付款日已到）：扣实际剩余也扣结余 */
+    const advancePaidTotal = Money.sum(advances
+      .filter(function (advance) { return advanceIsPaid(advance, reference); })
+      .map(advanceOutstanding));
+    /* 还没到付款日：像计划中的预算，只占结余、不扣实际剩余 */
+    const reservedThisMonth = Money.sum(advances
+      .filter(function (advance) { return !advanceIsPaid(advance, reference); })
+      .map(advanceOutstanding));
+    /* 更早月份登记、至今还没到付款日的预支，也要继续预留 */
+    const carriedReservations = Money.sum((pendingReservations || []).map(advanceOutstanding));
+    const advanceReservedTotal = Money.round(reservedThisMonth + carriedReservations);
+    /* 上个月替本月提前付掉的钱（归属本月的预支，只有真付了才算） */
     const incoming = incomingAdvances || [];
-    const advanceIncomingTotal = Money.sum(incoming.map(advanceOutstanding));
+    const advanceIncomingTotal = Money.sum(incoming
+      .filter(function (advance) { return advanceIsPaid(advance, reference); })
+      .map(advanceOutstanding));
 
     const recurringItems = items.map(function (item) { return recurrenceSchedule(item, reference); })
       .filter(function (schedule) { return !!schedule; });
@@ -715,6 +740,12 @@
       advanceTotal: advanceTotal,
       advanceRepaidTotal: advanceRepaidTotal,
       advanceOutstandingTotal: advanceOutstandingTotal,
+      advancePaidTotal: advancePaidTotal,
+      advanceReservedTotal: advanceReservedTotal,
+      advanceReservedThisMonth: reservedThisMonth,
+      advancePendingCount: advances.filter(function (advance) {
+        return !advanceIsPaid(advance, reference);
+      }).length,
       advanceIncomingTotal: advanceIncomingTotal,
       advanceIncomingCount: incoming.length,
       advanceIncoming: incoming,
@@ -738,7 +769,7 @@
     /** 不含对账调整的账面余额，也是下次对账的基准。 */
     summary.bookBalance = Money.round(
       income + carry + ledgerIncomeTotal + advanceIncomingTotal
-      - paidTotal - ledgerTotal - advanceOutstandingTotal
+      - paidTotal - ledgerTotal - advancePaidTotal
     );
     summary.actualBalance = Money.round(summary.bookBalance + summary.reconciliationAdjustment);
     /**
@@ -751,12 +782,12 @@
     /** 主结余：把预算先全部留出来之后还剩多少。 */
     summary.plannedBalance = Money.round(
       income + carry + ledgerIncomeTotal + advanceIncomingTotal - summary.committedBudget
-      - ledgerTotal - advanceOutstandingTotal + summary.reconciliationAdjustment
+      - ledgerTotal - advancePaidTotal - advanceReservedTotal + summary.reconciliationAdjustment
     );
     summary.budgetBalance = Money.round(plannedTotal - paidTotal);
     /** 还没花掉的预算（已经花掉的之外，还要占着的钱），主结余和实际剩余的差额就是它。 */
     summary.unspentBudget = Money.round(summary.committedBudget - paidTotal);
-    summary.totalSpending = Money.round(paidTotal + ledgerTotal + advanceOutstandingTotal);
+    summary.totalSpending = Money.round(paidTotal + ledgerTotal + advancePaidTotal);
     summary.budgetProgress = Math.min(1.5, Math.max(0, Money.ratio(paidTotal, plannedTotal)));
     summary.spendingRatio = Math.min(1.5, Math.max(0, Money.ratio(summary.totalSpending, summary.totalAvailable)));
     summary.isOverBudget = summary.budgetBalance < 0;
@@ -826,6 +857,19 @@
         if (Month.compare(monthKey, key) >= 0) return;
         month.advances.forEach(function (advance) {
           if (Month.equals(advanceTargetKey(advance), key)) result.push(advance);
+        });
+      });
+      return result;
+    }
+
+    /** 更早月份登记、到本月还没到付款日的预支：这些钱要继续预留（没真付出去，也不在结转里体现） */
+    function pendingReservationsFor(key, now) {
+      const result = [];
+      state.months.forEach(function (month) {
+        const monthKey = { year: month.year, month: month.month };
+        if (Month.compare(monthKey, key) >= 0) return;
+        month.advances.forEach(function (advance) {
+          if (!advanceIsPaid(advance, now)) result.push(advance);
         });
       });
       return result;
@@ -936,10 +980,11 @@
       summary(key, now) {
         const month = findMonth(key);
         const incoming = incomingAdvancesFor(key);
+        const pending = pendingReservationsFor(key, now);
         if (!month) {
-          return summarize(null, 0, now, incoming);
+          return summarize(null, 0, now, incoming, pending);
         }
-        return summarize(month, store.carryOver(key, [], now), now, incoming);
+        return summarize(month, store.carryOver(key, [], now), now, incoming, pending);
       },
 
       recentSummaries(count, endingAt, now) {
@@ -1482,6 +1527,7 @@
     itemPaymentsTotal: itemPaymentsTotal,
     sortedPayments: sortedPayments,
     advanceOutstanding: advanceOutstanding,
+    advanceIsPaid: advanceIsPaid,
     advanceTargetKey: advanceTargetKey,
     dayString: dayString,
     sortedItems: sortedItems,

@@ -377,7 +377,8 @@
       '<span>预算 <strong>−' + Money.format(summary.plannedTotal) + '</strong></span>' +
       (summary.overrunTotal > 0 ? '<span>超支 <strong>−' + Money.format(summary.overrunTotal) + '</strong></span>' : '') +
       (summary.ledgerTotal > 0 ? '<span>零星支出 <strong>−' + Money.format(summary.ledgerTotal) + '</strong></span>' : '') +
-      (summary.advanceOutstandingTotal > 0 ? '<span>预支 <strong>−' + Money.format(summary.advanceOutstandingTotal) + '</strong></span>' : '') +
+      (summary.advancePaidTotal > 0 ? '<span>预支 <strong>−' + Money.format(summary.advancePaidTotal) + '</strong></span>' : '') +
+      (summary.advanceReservedTotal > 0 ? '<span>预支待预留 <strong>−' + Money.format(summary.advanceReservedTotal) + '</strong></span>' : '') +
       (summary.advanceIncomingTotal > 0 ? '<span>上月预支转入 <strong>+' + Money.format(summary.advanceIncomingTotal) + '</strong></span>' : '');
   }
 
@@ -409,7 +410,9 @@
     tiles.push(tile(
       '实际剩余',
       Money.format(s.actualBalance),
-      '只扣已经花掉的，含未花预算 ' + Money.format(s.unspentBudget),
+      s.advanceReservedTotal > 0
+        ? '只扣已经花掉的：未花预算 ' + Money.format(s.unspentBudget) + ' + 预支待预留 ' + Money.format(s.advanceReservedTotal)
+        : '只扣已经花掉的，含未花预算 ' + Money.format(s.unspentBudget),
       s.isCashNegative ? 'bad' : '',
       '对账'
     ));
@@ -430,11 +433,19 @@
       ''
     ));
     tiles.push(tile(
-      '预支（提前支付）',
-      Money.format(s.advanceOutstandingTotal),
-      s.advanceCount === 0 ? '没有预支' : ('本月提前付了 ' + s.advanceCount + ' 笔 · 已收回 ' + Money.format(s.advanceRepaidTotal)),
-      s.advanceOutstandingTotal > 0 ? 'warn' : ''
+      '预支（已支付）',
+      Money.format(s.advancePaidTotal),
+      s.advanceCount === 0 ? '没有预支' : ('共登记 ' + s.advanceCount + ' 笔 · 已收回 ' + Money.format(s.advanceRepaidTotal)),
+      s.advancePaidTotal > 0 ? 'warn' : ''
     ));
+    if (s.advanceReservedTotal > 0) {
+      tiles.push(tile(
+        '预支待预留',
+        Money.format(s.advanceReservedTotal),
+        '付款日还没到：先占结余，不扣实际剩余',
+        'warn'
+      ));
+    }
     if (s.advanceIncomingTotal > 0) {
       tiles.push(tile(
         '上月预支转入',
@@ -646,16 +657,24 @@
     const rows = advances.map(function (advance) {
       const outstanding = core.advanceOutstanding(advance);
       const settled = outstanding === 0;
+      const paid = core.advanceIsPaid(advance, new Date());
       const target = core.advanceTargetKey(advance);
-      const subParts = ['付款 ' + toDateInputValue(advance.date), '归属 ' + Month.label(target)];
+      const subParts = [paid ? '付款 ' + toDateInputValue(advance.date) : toDateInputValue(advance.date) + ' 才付款',
+        '归属 ' + Month.label(target)];
+      if (!settled && !paid) subParts.push('钱还在手里，先占结余');
       if (advance.repaidAmount > 0) subParts.push('已收回 ' + Money.format(advance.repaidAmount));
       if (advance.note) subParts.push(advance.note);
+
+      const statusBadge = settled
+        ? '<span class="badge done">已收回</span> '
+        : (paid
+          ? '<span class="badge advance">已支付</span> '
+          : '<span class="badge plan">待预留</span> ');
 
       return '<div class="row tappable" data-edit-advance="' + advance.id + '">' +
         '<div class="avatar">' + (settled ? '✅' : '🗓️') + '</div>' +
         '<div class="main"><div class="title">' + esc(advance.title) + '</div>' +
-        '<div class="sub">' + (settled ? '<span class="badge done">已收回</span> ' : '<span class="badge advance">提前支付</span> ') +
-        esc(subParts.join(' · ')) + '</div></div>' +
+        '<div class="sub">' + statusBadge + esc(subParts.join(' · ')) + '</div></div>' +
         '<div class="row-actions">' +
         '<div class="amount ' + (settled ? 'muted' : 'spend') + '">' +
         (settled ? Money.format(advance.amount) : Money.format(outstanding)) + '</div>' +
@@ -664,7 +683,8 @@
     }).join('');
 
     const s = store.summary(currentKey);
-    const headerParts = ['本月提前支付 ' + Money.format(s.advanceOutstandingTotal)];
+    const headerParts = ['已支付 ' + Money.format(s.advancePaidTotal)];
+    if (s.advanceReservedTotal > 0) headerParts.push('待预留 ' + Money.format(s.advanceReservedTotal));
     if (s.advanceIncomingTotal > 0) {
       headerParts.push('上月转入 ' + Money.format(s.advanceIncomingTotal));
     }
@@ -2021,6 +2041,26 @@
       check('收回 200 后只占用 500', store.summary(currentKey).advanceOutstandingTotal === 500);
       check('收回后列表显示已收回', rowText().includes('已收回'));
 
+      // —— 付款日在未来的预支：只占结余，不扣实际剩余 ——
+      // 用「真实今天 + 40 天」保证真的是未来日期（当前月份可能是历史月份）
+      const futureDate = new Date();
+      futureDate.setDate(futureDate.getDate() + 40);
+      click('fab');
+      $('advance-title').value = '下下个月的机票';
+      $('advance-amount').value = '1200';
+      $('advance-date').value = toDateInputValue(futureDate.toISOString());
+      const beforeFutureAdvance = store.summary(currentKey);
+      $('sheet').querySelector('[data-action="save-advance"]').click();
+      const afterFutureAdvance = store.summary(currentKey);
+      check('付款日在未来时不扣实际剩余',
+        Money.cents(afterFutureAdvance.actualBalance) === Money.cents(beforeFutureAdvance.actualBalance),
+        Money.plain(beforeFutureAdvance.actualBalance) + ' → ' + Money.plain(afterFutureAdvance.actualBalance));
+      check('付款日在未来时要占结余（预留）',
+        Money.cents(afterFutureAdvance.plannedBalance) === Money.cents(beforeFutureAdvance.plannedBalance) - 120000,
+        Money.plain(beforeFutureAdvance.plannedBalance) + ' → ' + Money.plain(afterFutureAdvance.plannedBalance));
+      check('概览出现「预支待预留」', $('statTiles').textContent.includes('预支待预留'));
+      check('列表里显示「待预留」', rowText().includes('待预留'));
+
       click('nextMonth');
       check('下个月自动带入上月预支', store.summary(currentKey).advanceIncomingTotal === 500,
         Money.plain(store.summary(currentKey).advanceIncomingTotal));
@@ -2119,14 +2159,18 @@
       check('结余 = 收入 + 结转 + 零星收入 − 预算总额 − 零星支出 − 预支未还',
         Money.cents(withRecurring.plannedBalance) === Money.cents(
           withRecurring.income + withRecurring.carryOver + withRecurring.ledgerIncomeTotal
-          - withRecurring.committedBudget - withRecurring.ledgerTotal - withRecurring.advanceOutstandingTotal
+          + withRecurring.advanceIncomingTotal
+          - withRecurring.committedBudget - withRecurring.ledgerTotal
+          - withRecurring.advancePaidTotal - withRecurring.advanceReservedTotal
         ));
       check('顶部结余显示扣完预算后的金额',
         $('heroValue').textContent === Money.format(withRecurring.plannedBalance),
         $('heroValue').textContent + ' vs ' + Money.format(withRecurring.plannedBalance));
-      check('结余 + 未花预算 = 实际剩余',
-        Money.cents(withRecurring.plannedBalance + withRecurring.unspentBudget) === Money.cents(withRecurring.actualBalance),
+      check('结余 + 未花预算 + 预支待预留 = 实际剩余',
+        Money.cents(withRecurring.plannedBalance + withRecurring.unspentBudget + withRecurring.advanceReservedTotal)
+          === Money.cents(withRecurring.actualBalance),
         Money.plain(withRecurring.plannedBalance) + ' + ' + Money.plain(withRecurring.unspentBudget) +
+        ' + ' + Money.plain(withRecurring.advanceReservedTotal) +
         ' vs ' + Money.plain(withRecurring.actualBalance));
 
       // —— 生活费每日结算 ——
