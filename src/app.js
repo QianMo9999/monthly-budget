@@ -134,6 +134,169 @@
     window.setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
   }
 
+  /** 备份文件名：默认固定名字，方便在「文件」里覆盖同一个文件 */
+  function backupFileName(withDate) {
+    return withDate ? '月账本备份-' + fileStamp() + '.json' : '月账本备份.json';
+  }
+
+  // ---- 记住「上次保存到哪个文件」，下次直接覆盖，不再产生 (2)(3) ----
+
+  function openHandleDatabase() {
+    return new Promise(function (resolve, reject) {
+      if (!window.indexedDB) { reject(new Error('no-indexeddb')); return; }
+      const request = window.indexedDB.open('monthly-budget', 1);
+      request.onupgradeneeded = function () {
+        if (!request.result.objectStoreNames.contains('handles')) {
+          request.result.createObjectStore('handles');
+        }
+      };
+      request.onsuccess = function () { resolve(request.result); };
+      request.onerror = function () { reject(request.error); };
+    });
+  }
+
+  function handleStore(action) {
+    return openHandleDatabase().then(function (db) {
+      return new Promise(function (resolve) {
+        const tx = db.transaction('handles', action === 'get' ? 'readonly' : 'readwrite');
+        const store = tx.objectStore('handles');
+        if (action === 'get') {
+          const get = store.get('backup');
+          get.onsuccess = function () { resolve(get.result || null); };
+          get.onerror = function () { resolve(null); };
+        } else {
+          store.put(action.handle, 'backup');
+          tx.oncomplete = function () { resolve(true); };
+          tx.onerror = function () { resolve(false); };
+        }
+      });
+    }).catch(function () { return action === 'get' ? null : false; });
+  }
+
+  /**
+   * 桌面 Chrome/Edge：写进你选定的那个文件，直接覆盖，不会多出 (2)(3)。
+   * 返回 'saved'（已写入）/ 'cancelled'（用户取消）/ 'unavailable'（浏览器不支持或失败）
+   */
+  function exportJSONToPickedFile(name, text) {
+    if (typeof window.showSaveFilePicker !== 'function') return Promise.resolve('unavailable');
+    const writeTo = function (handle) {
+      return handle.createWritable().then(function (writable) {
+        return writable.write(text).then(function () { return writable.close(); });
+      }).then(function () { return 'saved'; }).catch(function () { return 'unavailable'; });
+    };
+    return handleStore('get').then(function (handle) {
+      if (!handle) {
+        return window.showSaveFilePicker({
+          suggestedName: name,
+          types: [{ description: 'JSON 备份', accept: { 'application/json': ['.json'] } }]
+        }).then(function (picked) {
+          return handleStore({ handle: picked }).then(function () { return writeTo(picked); });
+        }).catch(function (error) {
+          return isCancelled(error) ? 'cancelled' : 'unavailable';
+        });
+      }
+      return handle.queryPermission({ mode: 'readwrite' }).then(function (permission) {
+        if (permission === 'granted') return writeTo(handle);
+        return handle.requestPermission({ mode: 'readwrite' }).then(function (next) {
+          return next === 'granted' ? writeTo(handle) : 'unavailable';
+        });
+      }).catch(function () { return 'unavailable'; })
+        .then(function (result) {
+          if (result !== 'unavailable') return result;
+          // 文件被删掉或权限失效：重新选一次
+          return window.showSaveFilePicker({
+            suggestedName: name,
+            types: [{ description: 'JSON 备份', accept: { 'application/json': ['.json'] } }]
+          }).then(function (picked) {
+            return handleStore({ handle: picked }).then(function () { return writeTo(picked); });
+          }).catch(function (error) {
+            return isCancelled(error) ? 'cancelled' : 'unavailable';
+          });
+        });
+    }).catch(function () { return 'unavailable'; });
+  }
+
+  /**
+   * 手机：走系统分享面板，「存储到文件」时 iOS 会问「替换 / 保留两者」，选替换就是覆盖。
+   * 返回 'saved' / 'cancelled' / 'unavailable'
+   */
+  function exportJSONViaShare(name, text) {
+    if (typeof File !== 'function' || !navigator.canShare || !navigator.share) return Promise.resolve('unavailable');
+    let file = null;
+    try {
+      file = new File([text], name, { type: 'application/json' });
+    } catch (error) {
+      return Promise.resolve('unavailable');
+    }
+    if (!navigator.canShare({ files: [file] })) return Promise.resolve('unavailable');
+    return navigator.share({ files: [file], title: '月账本备份' }).then(function () {
+      return 'saved';
+    }).catch(function (error) {
+      return isCancelled(error) ? 'cancelled' : 'unavailable';
+    });
+  }
+
+  function isCancelled(error) {
+    return !!error && (error.name === 'AbortError' || error.name === 'NotAllowedError');
+  }
+
+  /** 只有真实的用户点击才会激活系统级文件选择器/分享面板 */
+  function userHasActivation() {
+    return !navigator.userActivation || navigator.userActivation.isActive !== false;
+  }
+
+  function isHandheld() {
+    return (navigator.maxTouchPoints || 0) > 0 || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  }
+
+  /**
+   * 导出备份。默认用固定文件名，尽力做到「覆盖上一次的文件」：
+   * 手机 → 系统分享面板（选「替换」）；电脑 → 文件选择器（选一次后自动覆盖）。
+   */
+  function exportBackup(withDate) {
+    const name = backupFileName(withDate);
+    const text = store.toJSON();
+
+    const fallback = function () {
+      download(name, text, 'application/json;charset=utf-8');
+      store.markBackupTaken();
+      toast('已导出：' + name + '（可在「文件」里替换旧文件）');
+      render();
+    };
+
+    if (withDate) { fallback(); return; }
+
+    const finishSaved = function (message) {
+      store.markBackupTaken();
+      toast(message);
+      render();
+    };
+
+    // 没有真实点击（例如自动化环境）时，直接走普通下载，避免弹不出来的系统对话框
+    if (!userHasActivation()) { fallback(); return; }
+
+    if (isHandheld()) {
+      exportJSONViaShare(name, text).then(function (shareResult) {
+        if (shareResult === 'saved') {
+          finishSaved('备份已保存（同名文件可在「文件」里选替换）');
+          return;
+        }
+        if (shareResult === 'cancelled') return;   // 用户取消，什么都不做
+        fallback();
+      });
+      return;
+    }
+
+    exportJSONToPickedFile(name, text).then(function (result) {
+      if (result === 'saved') {
+        finishSaved('已覆盖保存到 ' + name);
+        return;
+      }
+      if (result === 'cancelled') return;
+      fallback();
+    });
+  }
+
   function fileStamp() {
     const d = new Date();
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
@@ -182,10 +345,7 @@
   }
 
   function backupNow() {
-    download('月账本备份-' + fileStamp() + '.json', store.toJSON(), 'application/json;charset=utf-8');
-    store.markBackupTaken();
-    toast('已导出备份，存到「文件 / iCloud 云盘」即可');
-    render();
+    exportBackup(false);
   }
 
   function renderHeader() {
@@ -1020,7 +1180,10 @@
       '<div class="row tappable" data-action="reconcile"><div class="avatar">⚖️</div>' +
       '<div class="main"><div class="title">余额对账</div><div class="sub">填现在的实际余额，差额自动校正结余</div></div></div>' +
       '<div class="row tappable" data-action="export-json"><div class="avatar">💾</div>' +
-      '<div class="main"><div class="title">导出备份（JSON）</div><div class="sub">存到「文件」，换手机也能恢复</div></div></div>' +
+      '<div class="main"><div class="title">导出备份（覆盖同一个文件）</div>' +
+      '<div class="sub">固定文件名：手机提示「替换」、电脑直接覆盖，不会多出 (2)(3)</div></div></div>' +
+      '<div class="row tappable" data-action="export-json-dated"><div class="avatar">🗂️</div>' +
+      '<div class="main"><div class="title">导出带日期的备份</div><div class="sub">需要留多个历史版本时用这个</div></div></div>' +
       '<div class="row tappable" data-action="export-csv"><div class="avatar">📊</div>' +
       '<div class="main"><div class="title">导出表格（CSV）</div><div class="sub">用 Excel / Numbers 打开</div></div></div>' +
       '<div class="row tappable" data-action="import-json"><div class="avatar">📥</div>' +
@@ -1474,10 +1637,10 @@
         break;
       }
       case 'export-json':
-        download('月账本备份-' + fileStamp() + '.json', store.toJSON(), 'application/json;charset=utf-8');
-        store.markBackupTaken();
-        toast('已导出备份');
-        render();
+        exportBackup(false);
+        break;
+      case 'export-json-dated':
+        exportBackup(true);
         break;
       case 'export-csv':
         download('月账本-' + fileStamp() + '.csv', '\ufeff' + store.exportCSV(), 'text/csv;charset=utf-8');
@@ -1696,6 +1859,18 @@
       const csv = store.exportCSV();
       check('CSV 含预算行', csv.includes('2026年3月,预算,房租,居住,2500.00,2400.00,已完成'));
       check('CSV 含记账行', csv.includes('2026年3月,零星记账,奶茶,餐饮,18.50'));
+
+      // —— 备份导出：固定文件名（覆盖）与带日期两种 ——
+      check('设置里有「导出备份（覆盖同一个文件）」', !!$('sheet').querySelector('[data-action="export-json"]'));
+      check('设置里有「导出带日期的备份」', !!$('sheet').querySelector('[data-action="export-json-dated"]'));
+      store.state.settings.lastBackupAt = null;
+      render();
+      $('sheet').querySelector('[data-action="export-json-dated"]').click();
+      check('带日期备份会记录备份时间', !!store.settings.lastBackupAt);
+      store.state.settings.lastBackupAt = null;
+      render();
+      $('sheet').querySelector('[data-action="export-json"]').click();
+      check('固定文件名备份也会记录备份时间', !!store.settings.lastBackupAt);
       $('sheet').querySelector('[data-action="close"]').click();
 
       click('nextMonth');
@@ -1963,6 +2138,14 @@
 
   // 离线缓存：第一次打开就把整份文件存在手机里，之后断网也能用。
   if ('serviceWorker' in navigator && /^https?:$/.test(window.location.protocol)) {
+    // 新版本装上后自动刷新一次，省得用户手动刷两遍
+    const pageWasControlled = !!navigator.serviceWorker.controller;
+    let reloading = false;
+    navigator.serviceWorker.addEventListener('controllerchange', function () {
+      if (!pageWasControlled || reloading) return;
+      reloading = true;
+      window.location.reload();
+    });
     window.addEventListener('load', function () {
       navigator.serviceWorker.register('sw.js').catch(function () { /* 离线能力失败不影响使用 */ });
     });

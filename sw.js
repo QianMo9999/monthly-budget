@@ -2,7 +2,8 @@
  * 离线缓存：第一次打开时把整份文件存进手机，之后断网也能用。
  * 只在安全上下文（HTTPS 或 localhost）里生效，这正是托管到 GitHub Pages 的原因。
  */
-const CACHE_NAME = 'monthly-budget-v1';
+// 改动 App 文件后把这个版本号 +1，旧缓存就会自动清理
+const CACHE_NAME = 'monthly-budget-v2';
 const APP_SHELL = [
   './manifest.webmanifest',
   './src/styles.css',
@@ -58,19 +59,18 @@ self.addEventListener('fetch', function (event) {
     return;
   }
 
-  // 其它静态资源：缓存优先，同时后台更新
+  // 其它静态资源：优先取最新的（文件很小，联网时永远拿到新版本），断网时回落到缓存
   event.respondWith(
-    caches.match(request).then(function (cached) {
-      const network = fetch(request)
-        .then(function (response) {
-          if (response && response.status === 200) {
-            const copy = response.clone();
-            caches.open(CACHE_NAME).then(function (cache) { cache.put(request, copy); });
-          }
-          return response;
-        })
-        .catch(function () { return cached; });
-      return cached || network;
-    })
+    fetch(request)
+      .then(function (response) {
+        if (response && response.status === 200) {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then(function (cache) { cache.put(request, copy); });
+        }
+        return response;
+      })
+      .catch(function () {
+        return caches.match(request);
+      })
   );
 });
