@@ -691,7 +691,7 @@
         ? '<div class="list" style="margin-bottom:12px"><div class="row"><div class="avatar">↩️</div>' +
           '<div class="main"><div class="title">上月已提前支付</div>' +
           '<div class="sub">' + s.advanceIncomingCount + ' 笔共 ' + Money.format(s.advanceIncomingTotal) +
-          '：上个月已经付过了，本月不用再列这笔预算（钱不会再扣一次）</div></div>' +
+          '：上个月已经替你付过了，这部分已加回本月可用额度；本月为它记的预算结算时会刚好抵消</div></div>' +
           '<div class="amount muted">' + Money.format(s.advanceIncomingTotal) + '</div></div></div>'
         : '') +
       '<div class="list">' + rows + '</div>';
@@ -2032,9 +2032,11 @@
         Money.plain(store.summary(currentKey).advanceIncomingTotal));
       check('概览有「上月已提前支付」提示', $('statTiles').textContent.includes('上月已提前支付'));
       const nextMonthSummary = store.summary(currentKey);
-      check('下个月不会因为这笔预支被重复扣',
-        Money.cents(nextMonthSummary.actualBalance) === Money.cents(nextMonthSummary.income + nextMonthSummary.carryOver),
-        Money.plain(nextMonthSummary.actualBalance) + ' vs ' + Money.plain(nextMonthSummary.income + nextMonthSummary.carryOver));
+      check('下个月把这笔已付的钱加回可用额度（抵消本月的记账）',
+        Money.cents(nextMonthSummary.actualBalance) ===
+          Money.cents(nextMonthSummary.income + nextMonthSummary.carryOver + nextMonthSummary.advanceIncomingTotal),
+        Money.plain(nextMonthSummary.actualBalance) + ' vs ' +
+        Money.plain(nextMonthSummary.income + nextMonthSummary.carryOver + nextMonthSummary.advanceIncomingTotal));
       click('prevMonth');
       check('回到 3 月', $('monthLabel').textContent === '2026年3月');
 

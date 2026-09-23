@@ -14,7 +14,7 @@
   'use strict';
 
   /** App 版本号：改了功能就 +1，设置里能看到，用来确认线上是否已更新 */
-  const VERSION = 'v1.6.0';
+  const VERSION = 'v1.6.1';
 
   // ---------------------------------------------------------------- 金额
   // 内部一律按“分”做整数运算，避免 0.1 + 0.2 这类浮点误差。
@@ -709,10 +709,10 @@
     const carriedReservations = Money.sum((pendingReservations || []).map(advanceOutstanding));
     const advanceReservedTotal = Money.round(reservedThisMonth + carriedReservations);
     /*
-     * 归属本月的预支（上个月替本月提前付掉的）。
-     * 注意：这只是「信息」——钱在上个月就已经扣过了，不能再加回本月，
-     * 否则本月的实际剩余会比银行卡里多出这笔钱。它的用处是提醒你：
-     * 这笔开销已经付过，本月不用再列一遍预算。
+     * 归属本月的预支（上个月替本月提前付掉的钱，只算已经真付出去的）。
+     * 这笔钱要「加回」本月的可用额度：因为本月你可能还为它列了一条预算
+     * （比如 10 月的车票），等那条预算记成已支付时会扣一次，
+     * 这里的 +700 正好把它抵消掉，不会真的重复花钱。
      */
     const incoming = incomingAdvances || [];
     const advanceIncomingTotal = Money.sum(incoming
@@ -777,7 +777,8 @@
     summary.totalAvailable = Money.round(income + carry + ledgerIncomeTotal);
     /** 不含对账调整的账面余额，也是下次对账的基准。 */
     summary.bookBalance = Money.round(
-      income + carry + ledgerIncomeTotal - paidTotal - ledgerTotal - advancePaidTotal
+      income + carry + ledgerIncomeTotal + advanceIncomingTotal
+      - paidTotal - ledgerTotal - advancePaidTotal
     );
     summary.actualBalance = Money.round(summary.bookBalance + summary.reconciliationAdjustment);
     /**
@@ -789,7 +790,7 @@
     }));
     /** 主结余：把预算先全部留出来之后还剩多少。 */
     summary.plannedBalance = Money.round(
-      income + carry + ledgerIncomeTotal - summary.committedBudget
+      income + carry + ledgerIncomeTotal + advanceIncomingTotal - summary.committedBudget
       - ledgerTotal - advancePaidTotal - advanceReservedTotal + summary.reconciliationAdjustment
     );
     summary.budgetBalance = Money.round(plannedTotal - paidTotal);

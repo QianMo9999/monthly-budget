@@ -873,15 +873,15 @@ test('预支：本月买下个月的车票，钱从本月出、归属下个月',
   assert.equal(april.carryOver, 7300, '3 月结转的是实际剩下的钱');
   assert.equal(april.advanceIncomingTotal, 700, '只是提示：上个月已经付过这笔');
   assert.equal(april.advanceIncomingCount, 1);
-  assert.equal(april.actualBalance, 15300, '8000 收入 + 7300 结转（钱在 3 月就付掉了，不额外加）');
+  assert.equal(april.actualBalance, 16000, '8000 收入 + 7300 结转 + 700 上月替它付的');
 
   // 4 月把这 700 列成预算并结算：不会再重复扣一次
   const travel = store.addItem({ name: '车票', category: 'transport', plannedAmount: 700 }, APRIL);
   store.completeItem(travel.id, 700, APRIL);
   const aprilAfter = store.summary(APRIL);
   assert.equal(aprilAfter.paidTotal, 700);
-  assert.equal(aprilAfter.actualBalance, 14600, '往 4 月预算里又记了一次车票 → 这里会再扣 700');
-  assert.equal(store.summary(MARCH).actualBalance + 8000 - 700, aprilAfter.actualBalance, '3 月剩下的钱 + 4 月收入 − 4 月这笔记账');
+  assert.equal(aprilAfter.actualBalance, 15300, '4 月记了车票 700 → 加回的 700 正好抵消');
+  assert.equal(8000 + 8000 - 700, aprilAfter.actualBalance, '两个月收入 − 一次车票');
 });
 
 test('预支：可以指定归属月份，也可以不给下个月', () => {
@@ -956,11 +956,18 @@ test('预支：预留会一直保留到扣款日（10 月结余减掉，但实�
 
   // 扣款日到了之后：钱真的出去，实际剩余减少，预留解除；全程只扣这一次
   const later = new Date(2026, 10, 5, 12);           // 11 月 5 日
-  assert.equal(store.summary(SEP, later).actualBalance, 7500);
+  assert.equal(store.summary(SEP, later).actualBalance, 7500, '钱在 9 月真的出去了');
   assert.equal(store.summary(SEP, later).advanceReservedTotal, 0, '扣款后不再预留');
   assert.equal(store.summary(OCT, later).actualBalance, 15500, '10 月实际剩余随之减少');
   assert.equal(store.summary(OCT, later).plannedBalance, 15500, '也不再重复预留');
-  assert.equal(store.summary(NOV, later).actualBalance, 23500, '三个月总收入 24000 − 一次 500');
+
+  // 11 月（归属月）：这笔钱已经付过，所以加回可用额度，等你把 11 月的这笔预算记成已支付时抵消
+  const novemberAfter = store.summary(NOV, later);
+  assert.equal(novemberAfter.advanceIncomingTotal, 500, '11 月把上月已付的 500 加回');
+  assert.equal(novemberAfter.actualBalance, 24000, '8000 + 15500 结转 + 500');
+  const bill = store.addItem({ name: '11 月这笔开销', category: 'other', plannedAmount: 500 }, NOV);
+  store.completeItem(bill.id, 500, NOV);
+  assert.equal(store.summary(NOV, later).actualBalance, 23500, '记成已支付后 ≈ 银行卡（三个月收入 − 一次 500）');
 });
 
 test('预支：真的花了（9 月买了 10 月的车票）就当场扣实际剩余', () => {
@@ -977,10 +984,19 @@ test('预支：真的花了（9 月买了 10 月的车票）就当场扣实际�
   assert.equal(march.advanceReservedTotal, 0, '已经花掉的不用再预留');
 
   const april = store.summary(APRIL, now);
-  assert.equal(april.actualBalance, 15300, '10 月里不会再多出这 700（银行卡里就是这么多）');
-  assert.equal(april.plannedBalance, 15300);
-  assert.equal(april.advanceReservedTotal, 0, '不会重复扣');
-  assert.equal(april.advanceIncomingTotal, 700, '只作为提示：上个月已经付过');
+  assert.equal(april.advanceIncomingTotal, 700, '10 月把上月替它付的 700 加回可用额度');
+  assert.equal(april.actualBalance, 16000, '8000 收入 + 7300 结转 + 700 上月已付');
+  assert.equal(april.plannedBalance, 16000);
+  assert.equal(april.advanceReservedTotal, 0, '已经花掉的不再预留');
+
+  // 10 月把「车票 700」记成已支付：刚好把加回的 700 抵消掉
+  const ticket = store.addItem({ name: '车票', category: 'transport', plannedAmount: 700 }, APRIL);
+  assert.equal(store.summary(APRIL, now).actualBalance, 16000, '只是列预算还没扣');
+  store.completeItem(ticket.id, 700, APRIL);
+  const aprilAfter = store.summary(APRIL, now);
+  assert.equal(aprilAfter.actualBalance, 15300, '记账后 ≈ 银行卡余额');
+  assert.equal(aprilAfter.plannedBalance, 15300);
+  assert.equal(8000 + 8000 - 700, aprilAfter.actualBalance, '两个月收入 − 一次车票');
 });
 
 // ---------------------------------------------------------------- 备份提醒
