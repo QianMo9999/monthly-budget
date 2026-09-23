@@ -13,6 +13,9 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
 
+  /** App 版本号：改了功能就 +1，设置里能看到，用来确认线上是否已更新 */
+  const VERSION = 'v1.4.0';
+
   // ---------------------------------------------------------------- 金额
   // 内部一律按“分”做整数运算，避免 0.1 + 0.2 这类浮点误差。
 
@@ -236,10 +239,38 @@
       settledAt: data.settledAt || null,
       /* 重复预算：每天每人一笔（例如生活费）。null 表示普通的一次性预算。 */
       recurrence: normalizeRecurrence(data.recurrence),
+      /* 分次结算：这个项目可能分几笔付完，每笔有自己的金额和日期 */
+      payments: (data.payments || []).map(createPayment),
       sortIndex: typeof data.sortIndex === 'number' ? data.sortIndex : 0,
       createdAt: data.createdAt || now,
       updatedAt: data.updatedAt || now
     };
+  }
+
+  function createPayment(input) {
+    const data = input || {};
+    return {
+      id: data.id || uid(),
+      amount: Money.round(data.amount || 0),
+      date: data.date || new Date().toISOString(),
+      note: data.note || '',
+      createdAt: data.createdAt || new Date().toISOString()
+    };
+  }
+
+  /** 分次付款的合计 */
+  function itemPaymentsTotal(item) {
+    if (!item || !item.payments || item.payments.length === 0) return 0;
+    return Money.sum(item.payments.map(function (payment) { return payment.amount; }));
+  }
+
+  function sortedPayments(item) {
+    if (!item || !item.payments) return [];
+    return item.payments.slice().sort(function (a, b) {
+      const diff = new Date(b.date) - new Date(a.date);
+      if (diff !== 0) return diff;
+      return String(b.createdAt).localeCompare(String(a.createdAt));
+    });
   }
 
   function normalizeRecurrence(value) {
@@ -425,8 +456,8 @@
   /**
    * 重复预算的进度，逐天算：
    * - 已经「结算」过的天：按填写的实际金额算（可能少花，也可能超支）
-   * - 已经过去但没结算的天：按计划金额估算
-   * - 今天及未来：算作「还需要预留」
+   * - 今天及之前、还没结算的天：按计划金额先记入「已发生」（不然当天会显得结余偏高）
+   * - 明天及以后：算作「还需要预留」
    * 于是 计划总额 = 已发生 + 还需预留 + 省下的钱。
    * now 传进来是为了可测试；界面用当前时间。
    */
@@ -455,6 +486,8 @@
       const planCents = Money.cents(dailyTotal);
       const hasActual = Object.prototype.hasOwnProperty.call(overrides, dayKey);
       const isPast = dayDiff(current, today) > 0;
+      // 当天 0 点起就按计划计入已发生，用户当天填了实际金额会覆盖它
+      const isPastOrToday = dayDiff(current, today) >= 0;
 
       let status;
       let actual = null;
@@ -469,7 +502,7 @@
         if (actualCents > planCents) overrunCents += actualCents - planCents;
         else savedCents += planCents - actualCents;
         status = 'settled';
-      } else if (isPast) {
+      } else if (isPastOrToday) {
         spentCents += planCents;
         estimatedDays += 1;
         status = 'estimated';
@@ -524,12 +557,17 @@
 
   /** 已经花掉的钱：重复预算按已过天数自动累计，普通预算要手动结算。 */
   function itemPaidAmount(item, now) {
+    const paymentsTotal = itemPaymentsTotal(item);
     if (item.status === 'completed') {
+      // 有分次付款记录就按记录合计，否则用填写的实际金额
+      if (paymentsTotal > 0) return paymentsTotal;
       const actual = item.actualAmount === null || item.actualAmount === undefined
         ? itemPlannedAmount(item, now)
         : item.actualAmount;
       return Money.round(actual);
     }
+    // 还没标记完成，但已经付了几笔
+    if (paymentsTotal > 0) return paymentsTotal;
     const schedule = recurrenceSchedule(item, now);
     return schedule ? schedule.spentSoFar : 0;
   }
@@ -552,7 +590,8 @@
     if (item.status === 'completed') return 0;
     const schedule = recurrenceSchedule(item, now);
     if (schedule) return schedule.remainingAmount;
-    return Money.round(item.plannedAmount);
+    // 分次结算：扣掉已经付掉的部分，剩下的才是还要预留的
+    return Math.max(0, Money.round(itemPlannedAmount(item, now) - itemPaidAmount(item, now)));
   }
 
   function itemOverrun(item, now) {
@@ -569,8 +608,21 @@
     return Math.max(0, Money.round(itemPlannedAmount(item, now) - itemPaidAmount(item, now)));
   }
 
+  /**
+   * 预算项目排序：
+   * 1. 还没完成的排在前面，已完成的排在后面
+   * 2. 未完成之间按「计划金额」从大到小
+   * 3. 已完成之间按「实际结算金额」从大到小
+   */
   function sortedItems(month) {
     return month.items.slice().sort(function (a, b) {
+      const aDone = a.status === 'completed' ? 1 : 0;
+      const bDone = b.status === 'completed' ? 1 : 0;
+      if (aDone !== bDone) return aDone - bDone;
+      const aAmount = aDone ? itemPaidAmount(a) : itemPlannedAmount(a);
+      const bAmount = bDone ? itemPaidAmount(b) : itemPlannedAmount(b);
+      const byAmount = Money.cents(bAmount) - Money.cents(aAmount);
+      if (byAmount !== 0) return byAmount;
       if (a.sortIndex !== b.sortIndex) return a.sortIndex - b.sortIndex;
       return String(a.createdAt).localeCompare(String(b.createdAt));
     });
@@ -584,8 +636,14 @@
     });
   }
 
+  /**
+   * 预支排序：未收回的在前，已收回的在后；同一组里按日期从新到旧。
+   */
   function sortedAdvances(month) {
     return month.advances.slice().sort(function (a, b) {
+      const aSettled = advanceOutstanding(a) === 0 ? 1 : 0;
+      const bSettled = advanceOutstanding(b) === 0 ? 1 : 0;
+      if (aSettled !== bSettled) return aSettled - bSettled;
       const diff = new Date(b.date) - new Date(a.date);
       if (diff !== 0) return diff;
       return String(b.createdAt).localeCompare(String(a.createdAt));
@@ -958,6 +1016,53 @@
         });
       },
 
+      /**
+       * 记一笔付款（分次结算）。加起来够计划金额时自动标记完成。
+       * 返回这笔付款和付款后的状态，方便界面给出提示。
+       */
+      addItemPayment(id, input, key) {
+        let payment = null;
+        let finished = false;
+        let remaining = 0;
+        mutateMonth(key, function (month) {
+          const item = month.items.find(function (i) { return i.id === id; });
+          if (!item) return;
+          payment = createPayment(input);
+          payment.amount = Money.round(Math.max(0, payment.amount));
+          item.payments.push(payment);
+          const planned = itemPlannedAmount(item, new Date());
+          const paid = itemPaymentsTotal(item);
+          remaining = Math.max(0, Money.round(planned - paid));
+          if (remaining === 0) {
+            item.status = 'completed';
+            item.settledAt = item.settledAt || payment.date;
+            finished = true;
+          }
+          item.updatedAt = new Date().toISOString();
+        });
+        return { payment: payment, finished: finished, remaining: remaining };
+      },
+
+      deleteItemPayment(id, paymentId, key) {
+        mutateMonth(key, function (month) {
+          const item = month.items.find(function (i) { return i.id === id; });
+          if (!item) return;
+          item.payments = item.payments.filter(function (payment) { return payment.id !== paymentId; });
+          item.updatedAt = new Date().toISOString();
+        });
+      },
+
+      /** 手动把项目标记成已完成（剩下的钱不打算再花了）。 */
+      markItemCompleted(id, key) {
+        mutateMonth(key, function (month) {
+          const item = month.items.find(function (i) { return i.id === id; });
+          if (!item) return;
+          item.status = 'completed';
+          item.settledAt = item.settledAt || new Date().toISOString();
+          item.updatedAt = new Date().toISOString();
+        });
+      },
+
       deleteItem(id, key) {
         mutateMonth(key, function (month) {
           month.items = month.items.filter(function (i) { return i.id !== id; });
@@ -1222,11 +1327,12 @@
         store.months().slice().reverse().forEach(function (month) {
           const key = { year: month.year, month: month.month };
           sortedItems(month).forEach(function (item) {
+            const paidAmount = itemPaidAmount(item);
             rows.push([
               Month.label(key), '预算', item.name, categoryLabel(item.category),
               Money.csv(item.plannedAmount),
-              item.status === 'completed' ? Money.csv(itemPaidAmount(item)) : '',
-              item.status === 'completed' ? '已完成' : '计划中',
+              paidAmount > 0 ? Money.csv(paidAmount) : '',
+              item.status === 'completed' ? '已完成' : (paidAmount > 0 ? '部分已付' : '计划中'),
               dateText(item.settledAt), item.note
             ]);
           });
@@ -1349,6 +1455,7 @@
   };
 
   return {
+    VERSION: VERSION,
     Money: Money,
     Month: Month,
     Categories: Categories,
@@ -1370,6 +1477,8 @@
     itemOutstandingPlan: itemOutstandingPlan,
     itemOverrun: itemOverrun,
     itemSaved: itemSaved,
+    itemPaymentsTotal: itemPaymentsTotal,
+    sortedPayments: sortedPayments,
     advanceOutstanding: advanceOutstanding,
     advanceTargetKey: advanceTargetKey,
     dayString: dayString,

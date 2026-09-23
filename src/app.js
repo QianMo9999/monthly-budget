@@ -527,9 +527,15 @@
       const paid = core.itemPaidAmount(item);
       const over = core.itemOverrun(item) > 0;
       const schedule = core.recurrenceSchedule(item, new Date());
+      const payments = core.sortedPayments(item);
+      const planned = core.itemPlannedAmount(item);
+      const remainingToPay = Math.max(0, Money.round(planned - paid));
+      const partial = !done && payments.length > 0;
       const badge = done
         ? '<span class="badge ' + (over ? 'over' : 'done') + '">' + (over ? '超支' : '已完成') + '</span>'
-        : '<span class="badge plan">计划中</span>';
+        : (partial
+          ? '<span class="badge advance">部分已付</span>'
+          : '<span class="badge plan">计划中</span>');
       const headParts = [categoryLabel(item.category)];
       const detailParts = [];
       if (schedule) {
@@ -541,6 +547,10 @@
           : schedule.peopleCount + ' 人 · ' + Money.format(schedule.dailyTotal) + '/天');
         detailParts.push('已发生 ' + Money.format(schedule.spentSoFar));
         detailParts.push('还需留 ' + Money.format(schedule.remainingAmount) + '（' + schedule.remainingDays + ' 天）');
+      } else if (payments.length > 0) {
+        headParts.push('分 ' + payments.length + ' 次');
+        detailParts.push('已付 ' + Money.format(paid) + ' / 计划 ' + Money.format(planned));
+        if (remainingToPay > 0) detailParts.push('还差 ' + Money.format(remainingToPay));
       }
       if (item.dueDate) detailParts.push('截止 ' + toDateInputValue(item.dueDate));
       if (item.note) detailParts.push(item.note);
@@ -549,13 +559,15 @@
 
       const amountNode = done
         ? '<div class="amount ' + (over ? 'spend' : (core.itemSaved(item) > 0 ? 'income' : '')) + '">' + Money.format(paid) + '</div>'
-        : '<div class="amount">' + Money.format(core.itemPlannedAmount(item)) + '</div>';
+        : (partial
+          ? '<div class="amount">' + Money.format(paid) + '/' + Money.format(planned) + '</div>'
+          : '<div class="amount">' + Money.format(planned) + '</div>');
 
       const action = done
         ? ''
         : (schedule
           ? '<button class="mini-btn" data-settle-day="' + item.id + '">记今天</button>'
-          : '<button class="mini-btn" data-settle="' + item.id + '">结算</button>');
+          : '<button class="mini-btn" data-pay="' + item.id + '">付款</button>');
 
       if (schedule && schedule.savedSoFar > 0) detailParts.push('已省 ' + Money.format(schedule.savedSoFar));
       if (schedule && schedule.overrunSoFar > 0) detailParts.push('已超 ' + Money.format(schedule.overrunSoFar));
@@ -790,6 +802,8 @@
       startDate: recurring && item.recurrence.startDate ? item.recurrence.startDate : range.start,
       endDate: recurring && item.recurrence.endDate ? item.recurrence.endDate : range.end,
       overrides: recurring ? Object.assign({}, item.recurrence.overrides || {}) : {},
+      /* 每天明细默认收起：不然一个月 31 行，每次保存都要滑很久 */
+      daysExpanded: false,
       dueDate: item && item.dueDate ? toDateInputValue(item.dueDate) : '',
       note: item ? item.note : '',
       status: item ? item.status : 'planned'
@@ -890,6 +904,25 @@
   function dayDetailInnerHTML() {
     const schedule = draftSchedule();
     if (!schedule || schedule.totalDays <= 0) return '';
+    const expanded = !!(sheetState && sheetState.daysExpanded);
+    const todayKey = core.dayString(new Date());
+    const today = schedule.days.find(function (day) { return day.date === todayKey; });
+    const todayText = !today
+      ? ''
+      : (today.actual === null
+        ? '今天待结算 ' + Money.format(today.planned)
+        : '今天已结算 ' + Money.format(today.actual));
+
+    const head =
+      '<div class="day-detail-head">' +
+      '<div><div class="dd-title">每天明细</div>' +
+      '<div class="dd-sub">共 ' + schedule.totalDays + ' 天 · 已结算 ' + schedule.settledDays + ' 天' +
+      (todayText ? ' · ' + todayText : '') + '</div></div>' +
+      '<button type="button" class="mini-btn ghost" data-toggle-days="1">' + (expanded ? '收起' : '展开') + '</button>' +
+      '</div>';
+
+    if (!expanded) return head;
+
     const rows = schedule.days.map(function (day) {
       const editable = day.isPast || day.isToday;
       let diffNode = '';
@@ -913,9 +946,9 @@
         '<div class="day-actual">' + actualNode + '</div>' +
         '</div>';
     }).join('');
-    return '<label>每天明细（每天结算一次）</label>' +
-      '<div class="hint" style="margin:0 0 8px">填实际花了多少就行：比计划少算省下，比计划多算超支，没填的过去天数按计划估算。</div>' +
-      '<div class="day-list">' + rows + '</div>';
+    return head +
+      '<div class="hint" style="margin:8px 0 8px">填实际花了多少就行：比计划少算省下，比计划多算超支，没填的过去天数按计划估算。</div>' +
+      '<div class="day-list" id="day-list">' + rows + '</div>';
   }
 
   function dayDetailHTML() {
@@ -973,6 +1006,9 @@
         : '') +
       (editing && draft.mode === 'daily' && draft.status !== 'completed'
         ? '<div class="sheet-actions"><button class="btn" data-action="settle-whole-item">整月一次性结算</button></div>'
+        : '') +
+      (editing && draft.mode === 'fixed' && draft.status !== 'completed'
+        ? '<div class="sheet-actions"><button class="btn" data-action="open-payment">分次付款 / 记一笔付款</button></div>'
         : '');
 
     openSheet(html, draft);
@@ -1008,6 +1044,52 @@
       '<button class="btn primary" data-action="confirm-settle">完成并记账</button>' +
       '</div>';
     openSheet(html, { kind: 'settle', itemId: itemId });
+  }
+
+  /** 分次付款：一个预算项目分几笔付完，每笔都有自己的金额和日期。 */
+  function openPaymentSheet(itemId) {
+    const item = store.item(itemId, currentKey);
+    if (!item) return;
+    const planned = core.itemPlannedAmount(item);
+    const paid = core.itemPaidAmount(item);
+    const remaining = Math.max(0, Money.round(planned - paid));
+    const payments = core.sortedPayments(item);
+
+    const historyHTML = payments.length === 0 ? '' :
+      '<div class="field"><label>付款记录</label><div class="day-list">' +
+      payments.map(function (payment) {
+        const when = new Date(payment.date);
+        return '<div class="day-row">' +
+          '<div class="day-date">' + (when.getMonth() + 1) + '月' + when.getDate() + '日 付款' +
+          (payment.note ? ' · ' + esc(payment.note) : '') + '</div>' +
+          '<div class="day-plan">' + Money.format(payment.amount) + '</div>' +
+          '<div class="day-actual"><button class="mini-btn ghost" data-delete-payment="' + payment.id + '">删除这笔</button></div>' +
+          '</div>';
+      }).join('') + '</div></div>';
+
+    const html =
+      '<h2>记一笔付款 · ' + esc(item.name) + '</h2>' +
+      '<div class="stat-line"><span class="k">计划金额</span><span class="v">' + Money.format(planned) + '</span></div>' +
+      '<div class="stat-line"><span class="k">已经付了</span><span class="v">' + Money.format(paid) +
+      (payments.length > 1 ? '（' + payments.length + ' 笔）' : '') + '</span></div>' +
+      '<div class="stat-line"><span class="k">还差</span><span class="v">' + Money.format(remaining) + '</span></div>' +
+      '<div class="hint" style="margin-top:10px">分几次付也没问题：每笔都记一下，付满计划金额会自动标记完成。</div>' +
+      '<div class="field" style="margin-top:14px"><label>本次付款金额</label>' +
+      '<div class="amount-input"><span class="prefix">¥</span>' +
+      '<input id="payment-amount" type="text" inputmode="decimal" value="' + esc(Money.plain(remaining)) + '"></div></div>' +
+      '<div class="field"><label>付款日期</label>' +
+      '<input id="payment-date" type="date" value="' + todayISO() + '"></div>' +
+      '<div class="field"><label>备注（可选）</label>' +
+      '<input id="payment-note" type="text" placeholder="例如：第一笔定金"></div>' +
+      historyHTML +
+      '<div class="sheet-actions">' +
+      '<button class="btn" data-action="close">取消</button>' +
+      '<button class="btn primary" data-action="save-payment">记下这笔</button>' +
+      '</div>' +
+      (item.status !== 'completed' && remaining > 0
+        ? '<div class="sheet-actions"><button class="btn warn" data-action="finish-item">剩下的不打算花了，直接标记完成</button></div>'
+        : '');
+    openSheet(html, { kind: 'payment', itemId: itemId });
   }
 
   /** 生活费「记今天」：只结算某一天，可以少花也可以超支。 */
@@ -1164,6 +1246,7 @@
     const settings = store.settings;
     const html =
       '<h2>设置与数据</h2>' +
+      '<div class="stat-line"><span class="k">版本</span><span class="v" id="app-version">' + core.VERSION + '</span></div>' +
       '<div class="stat-line"><span class="k">离线可用</span><span class="v">' + offlineStateText() + '</span></div>' +
       '<div class="stat-line"><span class="k">上次备份</span><span class="v">' + backupAgeText() + '</span></div>' +
       '<div class="field"><label>默认月收入</label>' +
@@ -1188,8 +1271,6 @@
       '<div class="main"><div class="title">导出表格（CSV）</div><div class="sub">用 Excel / Numbers 打开</div></div></div>' +
       '<div class="row tappable" data-action="import-json"><div class="avatar">📥</div>' +
       '<div class="main"><div class="title">导入备份</div><div class="sub">从 JSON 文件恢复数据</div></div></div>' +
-      '<div class="row tappable" data-action="seed-sample"><div class="avatar">✨</div>' +
-      '<div class="main"><div class="title">填入示例数据</div><div class="sub">在当前月份生成一套示例</div></div></div>' +
       '</div>' +
       '<div class="sheet-actions">' +
       '<button class="btn danger" data-action="clear-data">清空数据</button>' +
@@ -1408,10 +1489,11 @@
 
   // 列表内的点击（编辑 / 结算 / 归还 / 空状态引导）
   $('listArea').addEventListener('click', function (event) {
-    const target = event.target.closest('[data-settle],[data-settle-day],[data-repay],[data-edit-item],[data-edit-entry],[data-edit-advance],[data-empty-action]');
+    const target = event.target.closest('[data-settle],[data-settle-day],[data-pay],[data-repay],[data-edit-item],[data-edit-entry],[data-edit-advance],[data-empty-action]');
     if (!target) return;
     const settle = target.getAttribute('data-settle');
     const settleDay = target.getAttribute('data-settle-day');
+    const pay = target.getAttribute('data-pay');
     const repay = target.getAttribute('data-repay');
     const editItem = target.getAttribute('data-edit-item');
     const editEntry = target.getAttribute('data-edit-entry');
@@ -1420,6 +1502,7 @@
 
     if (settle) { openSettleSheet(settle); return; }
     if (settleDay) { openDaySheet(settleDay); return; }
+    if (pay) { openPaymentSheet(pay); return; }
     if (repay) { openRepaySheet(repay); return; }
     if (editItem) { openItemSheet(editItem); return; }
     if (editEntry) { openEntrySheet(editEntry); return; }
@@ -1435,6 +1518,14 @@
     if (modeChip) {
       const draft = readItemDraft();
       draft.mode = modeChip.getAttribute('data-mode');
+      renderItemSheet();
+      return;
+    }
+
+    const toggleDays = event.target.closest('[data-toggle-days]');
+    if (toggleDays) {
+      const draft = readItemDraft();
+      draft.daysExpanded = !draft.daysExpanded;
       renderItemSheet();
       return;
     }
@@ -1543,6 +1634,40 @@
       case 'settle-whole-item':
         openSettleSheet(sheetState.itemId);
         break;
+      case 'open-payment':
+        openPaymentSheet(sheetState.itemId);
+        break;
+      case 'save-payment': {
+        const amount = Money.parse(valueOf('payment-amount'));
+        if (amount === null || amount <= 0) { toast('请填写正确的金额'); return; }
+        const itemId = sheetState.itemId;
+        const result = store.addItemPayment(itemId, {
+          amount: amount,
+          date: fromDateInputValue(valueOf('payment-date')),
+          note: valueOf('payment-note')
+        }, currentKey);
+        closeSheet();
+        toast(result.finished
+          ? '已付满，标记为已完成'
+          : (result.remaining > 0 ? '已记下这笔，还差 ' + Money.format(result.remaining) : '已记下这笔'));
+        render();
+        break;
+      }
+      case 'delete-payment': {
+        const itemId = sheetState.itemId;
+        const paymentNode = event.target.closest('[data-delete-payment]');
+        store.deleteItemPayment(itemId, paymentNode.getAttribute('data-delete-payment'), currentKey);
+        openPaymentSheet(itemId);
+        render();
+        toast('已删除这笔付款');
+        break;
+      }
+      case 'finish-item':
+        store.markItemCompleted(sheetState.itemId, currentKey);
+        closeSheet();
+        toast('已标记完成');
+        render();
+        break;
       case 'save-day': {
         const amount = Money.parse(valueOf('day-actual-input'));
         if (amount === null || amount < 0) { toast('请填写正确的金额'); return; }
@@ -1648,12 +1773,6 @@
         break;
       case 'import-json':
         $('import-file').click();
-        break;
-      case 'seed-sample':
-        core.SampleData.seed(store, currentKey);
-        closeSheet();
-        toast('已填入示例数据');
-        render();
         break;
       case 'clear-data':
         if (window.confirm('确定清空全部数据吗？建议先导出备份。')) {
@@ -1774,6 +1893,11 @@
     function rowText() {
       return $('listArea').textContent;
     }
+    /** 手机上「左右晃动」的根因就是横向溢出：页面比视口宽 */
+    function checkNoOverflow(label) {
+      const overflow = document.documentElement.scrollWidth - window.innerWidth;
+      check(label + ' 没有横向溢出', overflow <= 1, '超出 ' + overflow + 'px');
+    }
 
     try {
       results.push('INFO  视口 ' + window.innerWidth + 'x' + window.innerHeight + ' dpr=' + window.devicePixelRatio);
@@ -1793,6 +1917,7 @@
 
       click('fab');
       check('点＋打开新增预算表单', !$('sheet').classList.contains('hidden'));
+      checkNoOverflow('新增预算面板');
       $('item-name').value = '房租';
       $('item-amount').value = '2500';
       $('sheet').querySelector('[data-chip-value="housing"]').click();
@@ -1800,16 +1925,16 @@
       check('新增预算后列表出现该项目', rowText().includes('房租'), rowText().slice(0, 40));
       check('预算计入计划总额', store.summary(currentKey).plannedTotal === 2500);
 
-      $('listArea').querySelector('[data-settle]').click();
-      check('点结算打开结算表单', !!$('settle-amount'));
-      $('settle-amount').value = '2400';
-      $('sheet').querySelector('[data-action="confirm-settle"]').click();
+      $('listArea').querySelector('[data-pay]').click();
+      check('点付款打开付款表单', !!$('payment-amount'));
+      $('payment-amount').value = '2400';
+      $('sheet').querySelector('[data-action="save-payment"]').click();
       const afterSettle = store.summary(currentKey);
-      check('结算后已付 2400', afterSettle.paidTotal === 2400);
-      check('结算后手里剩 5600', afterSettle.actualBalance === 5600, String(afterSettle.actualBalance));
-      check('结算后顶部结余按实际 2400 扣 = 5600',
-        $('heroValue').textContent === Money.format(5600), $('heroValue').textContent);
-      check('列表出现已完成标记', rowText().includes('已完成'));
+      check('付款后已付 2400', afterSettle.paidTotal === 2400);
+      check('付款后手里剩 5600', afterSettle.actualBalance === 5600, String(afterSettle.actualBalance));
+      check('还没付满，顶部结余仍按计划 2500 留 = 5500',
+        $('heroValue').textContent === Money.format(5500), $('heroValue').textContent);
+      check('列表显示部分已付', rowText().includes('部分已付'));
 
       click('tab-ledger');
       click('fab');
@@ -1817,6 +1942,7 @@
       $('entry-amount').value = '18.5';
       $('entry-date').value = '2026-03-03';
       $('sheet').querySelector('[data-action="save-entry"]').click();
+      checkNoOverflow('记账面板');
       check('记一笔后出现在列表', rowText().includes('奶茶'));
       check('记账合计 18.5', store.summary(currentKey).ledgerTotal === 18.5);
       check('记账后结余 5581.5', store.summary(currentKey).actualBalance === 5581.5, String(store.summary(currentKey).actualBalance));
@@ -1833,6 +1959,7 @@
       check('归属月份可以改', $('advance-target-label').textContent === Month.label(Month.next(Month.next(currentKey))));
       $('sheet').querySelector('[data-target-step="-1"]').click();
       $('sheet').querySelector('[data-action="save-advance"]').click();
+      checkNoOverflow('预支面板');
       check('新增预支成功', store.advances(currentKey).length === 1);
       check('预支从本月扣钱', store.summary(currentKey).actualBalance === 5581.5 - 700,
         Money.plain(store.summary(currentKey).actualBalance));
@@ -1855,9 +1982,10 @@
 
       click('openSettings');
       check('设置面板打开', !$('sheet').classList.contains('hidden'));
+      checkNoOverflow('设置面板');
       $('sheet').querySelector('[data-action="export-csv"]').click();
       const csv = store.exportCSV();
-      check('CSV 含预算行', csv.includes('2026年3月,预算,房租,居住,2500.00,2400.00,已完成'));
+      check('CSV 含预算行', csv.includes('2026年3月,预算,房租,居住,2500.00,2400.00,部分已付'));
       check('CSV 含记账行', csv.includes('2026年3月,零星记账,奶茶,餐饮,18.50'));
 
       // —— 备份导出：固定文件名（覆盖）与带日期两种 ——
@@ -1897,6 +2025,7 @@
       $('item-name').value = '生活费';
       $('sheet').querySelector('[data-mode="daily"]').click();
       check('切到按天重复模式', !!$('item-people') && !!$('item-preview'));
+      checkNoOverflow('新增预算面板（按天重复）');
       check('默认两个人两个金额输入框', $('sheet').querySelectorAll('[data-person-amount]').length === 2);
       $('sheet').querySelector('[data-people="1"]').click();
       check('加一个人变成三个输入框', $('sheet').querySelectorAll('[data-person-amount]').length === 3);
@@ -1932,7 +2061,13 @@
 
       // —— 生活费每日结算 ——
       $('listArea').querySelector('[data-edit-item="' + recurringItem.id + '"]').click();
-      check('打开生活费项目后面板显示每天明细',
+      check('每天明细默认收起（页面不用再滚半天）',
+        $('sheet').querySelectorAll('.day-row').length === 0,
+        $('sheet').querySelectorAll('.day-row').length + ' 行');
+      check('收起时给出汇总和展开按钮',
+        $('sheet').textContent.includes('已结算') && !!$('sheet').querySelector('[data-toggle-days]'));
+      $('sheet').querySelector('[data-toggle-days]').click();
+      check('展开后能看到整月每天明细',
         $('sheet').querySelectorAll('.day-row').length === Month.dayCount(currentKey),
         $('sheet').querySelectorAll('.day-row').length + ' 行');
       check('未来的天显示「待预留」', $('sheet').textContent.includes('待预留'));
@@ -1964,9 +2099,10 @@
       $('sheet').querySelector('[data-action="save-day"]').click();
       const scheduleAfterToday = core.recurrenceSchedule(
         store.items(currentKey).find(function (item) { return item.name === '生活费'; }), new Date());
-      check('今天结算后不再算进待预留',
-        scheduleAfterToday.remainingDays === scheduleBeforeToday.remainingDays - 1,
-        scheduleAfterToday.remainingDays + ' vs ' + scheduleBeforeToday.remainingDays);
+      check('今天结算后按实际算（待预留天数不变）',
+        scheduleAfterToday.remainingDays === scheduleBeforeToday.remainingDays &&
+        Money.cents(scheduleAfterToday.spentSoFar) === Money.cents(scheduleBeforeToday.spentSoFar) + 5000,
+        '已发生 ' + Money.plain(scheduleBeforeToday.spentSoFar) + ' → ' + Money.plain(scheduleAfterToday.spentSoFar));
       check('今天花超的 50 被记账', Money.cents(scheduleAfterToday.overrunSoFar) === 5000,
         '超 ' + Money.plain(scheduleAfterToday.overrunSoFar));
       check('列表里显示已超', rowText().includes('已超'));
@@ -1985,6 +2121,35 @@
       const scheduleAfterClear = core.recurrenceSchedule(
         store.items(currentKey).find(function (item) { return item.name === '生活费'; }), new Date());
       check('取消后恢复按计划推算', Money.cents(scheduleAfterClear.overrunSoFar) === 0 && scheduleAfterClear.settledDays === 1);
+
+      // —— 预算项目分次结算 ——
+      click('tab-budget');
+      click('fab');
+      $('item-name').value = '装修';
+      $('item-amount').value = '3000';
+      $('sheet').querySelector('[data-action="save-item"]').click();
+      const buildItem = store.items(currentKey).find(function (item) { return item.name === '装修'; });
+      check('列表出现「付款」按钮', !!$('listArea').querySelector('[data-pay="' + buildItem.id + '"]'));
+
+      $('listArea').querySelector('[data-pay="' + buildItem.id + '"]').click();
+      check('打开付款面板', !!$('payment-amount'));
+      check('预填还差的钱', $('payment-amount').value === '3000', $('payment-amount').value);
+      $('payment-amount').value = '1000';
+      $('sheet').querySelector('[data-action="save-payment"]').click();
+      check('第一笔付款记下了', core.itemPaymentsTotal(store.item(buildItem.id, currentKey)) === 1000);
+      check('没付完就不算完成', store.item(buildItem.id, currentKey).status === 'planned');
+      check('列表显示「部分已付」', rowText().includes('部分已付'));
+      check('列表显示还差多少', rowText().includes('还差'));
+
+      $('listArea').querySelector('[data-pay="' + buildItem.id + '"]').click();
+      check('第二笔预填剩余 2000', $('payment-amount').value === '2000', $('payment-amount').value);
+      check('付款记录里能看到第一笔', $('sheet').textContent.includes('付款记录'));
+      $('payment-amount').value = '2000';
+      $('sheet').querySelector('[data-action="save-payment"]').click();
+      const buildDone = store.item(buildItem.id, currentKey);
+      check('付满自动标记完成', buildDone.status === 'completed');
+      check('两次付款合计 3000', core.itemPaymentsTotal(buildDone) === 3000);
+      check('列表显示已完成', rowText().includes('已完成'));
 
       // —— 余额对账：漏记几笔时用实际余额校正 ——
       const liveItem = store.items(currentKey).find(function (item) { return item.name === '生活费'; });
@@ -2154,6 +2319,7 @@
   // ?offline=1 用于验证「断网也能打开」：把结果写进页面，方便自动化检查
   if (window.location.search.indexOf('offline=1') >= 0) {
     const lines = [];
+    lines.push('版本: ' + core.VERSION);
     lines.push('页面已渲染: ' + ($('heroValue') ? $('heroValue').textContent : '无'));
     lines.push('本地数据可读: ' + (function () {
       try {

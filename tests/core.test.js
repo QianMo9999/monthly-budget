@@ -376,28 +376,28 @@ test('示例数据：金额口径正确', () => {
   assert.equal(s.itemCount, 7);
   assert.equal(s.completedItemCount, 4);
   assert.equal(s.plannedTotal, 6590, '含生活费 70/天 × 31 天');
-  assert.equal(s.paidTotal, 4326, '含生活费已过 15 天，其中两天按实际结算');
-  assert.equal(s.remainingBudget, 2240, '含生活费后续 16 天');
+  assert.equal(s.paidTotal, 4396, '含生活费 1–16 号（当天也按计划先记），其中两天按实际结算');
+  assert.equal(s.remainingBudget, 2170, '含生活费明天起的 15 天');
   assert.equal(s.ledgerTotal, 226);
   assert.equal(s.ledgerIncomeTotal, 120);
   assert.equal(s.advanceOutstandingTotal, 700, '示例里提前买了下个月的车票');
-  assert.equal(s.actualBalance, 2868);
+  assert.equal(s.actualBalance, 2798);
   assert.equal(s.committedBudget, 6566, '已完成项目按实际（水电省 32、交通省 60 直接回结余）');
   assert.equal(s.plannedBalance, 628);
-  assert.equal(s.unspentBudget, 2240);
+  assert.equal(s.unspentBudget, 2170);
   assert.equal(s.unspentBudget, s.remainingBudget);
   assert.equal(s.plannedBalance + s.unspentBudget, s.actualBalance);
   assert.equal(s.recurringCount, 1);
   assert.equal(s.recurringDailyTotal, 70);
-  assert.equal(s.recurringRemainingTotal, 1120);
+  assert.equal(s.recurringRemainingTotal, 1050);
 
   const living = store.items(MARCH).find(item => item.name === '生活费');
   const schedule = core.recurrenceSchedule(living, NOW);
   assert.equal(schedule.settledDays, 2);
   assert.equal(schedule.savedSoFar, 10, '第 2 天计划 70 实际 60');
   assert.equal(schedule.overrunSoFar, 20, '第 4 天计划 70 实际 90');
-  assert.equal(schedule.spentSoFar, 1060);
-  assert.equal(schedule.remainingAmount, 1120);
+  assert.equal(schedule.spentSoFar, 1130);
+  assert.equal(schedule.remainingAmount, 1050);
 
   // 下个月应该收到这笔预支的转入
   store.ensureMonth({ year: 2026, month: 4 });
@@ -444,11 +444,12 @@ test('重复预算：整月按天算，支持每人不同金额', () => {
   assert.equal(schedule.peopleCount, 3);
   assert.equal(schedule.dailyTotal, 130, '50 + 40 + 40');
   assert.equal(schedule.totalDays, 31);
-  assert.equal(schedule.spentDays, 15, '1–15 号算已发生，今天还没花');
-  assert.equal(schedule.remainingDays, 16);
+  assert.equal(schedule.spentDays, 16, '1–16 号算已发生（当天按计划先记）');
+  assert.equal(schedule.remainingDays, 15, '明天起才是待预留');
+  assert.equal(schedule.days.find(d => d.isToday).status, 'estimated', '当天也算已发生');
   assert.equal(schedule.plannedAmount, 4030);
-  assert.equal(schedule.spentSoFar, 1950);
-  assert.equal(schedule.remainingAmount, 2080, '后续还需要留的预算');
+  assert.equal(schedule.spentSoFar, 2080);
+  assert.equal(schedule.remainingAmount, 1950, '后续还需要留的预算');
 });
 
 test('重复预算：未开始 / 已结束 / 单天 / 自定义区间', () => {
@@ -466,17 +467,18 @@ test('重复预算：未开始 / 已结束 / 单天 / 自定义区间', () => {
     recurrence: { type: 'daily', amounts: [60], startDate: '2026-03-10', endDate: '2026-03-10' }
   }), new Date(2026, 2, 10, 9));
   assert.equal(single.totalDays, 1);
-  assert.equal(single.spentDays, 0, '当天还没花');
-  assert.equal(single.remainingAmount, 60);
+  assert.equal(single.spentDays, 1, '当天就按计划记入');
+  assert.equal(single.spentSoFar, 60);
+  assert.equal(single.remainingAmount, 0);
 
   const custom = core.recurrenceSchedule(recurringItem({
     recurrence: { type: 'daily', amounts: [100], startDate: '2026-03-10', endDate: '2026-03-20' }
   }), new Date(2026, 2, 16, 12));
   assert.equal(custom.totalDays, 11);
-  assert.equal(custom.spentDays, 6);
-  assert.equal(custom.remainingDays, 5);
+  assert.equal(custom.spentDays, 7, '10–16 号（含当天）');
+  assert.equal(custom.remainingDays, 4);
   assert.equal(custom.plannedAmount, 1100);
-  assert.equal(custom.remainingAmount, 500);
+  assert.equal(custom.remainingAmount, 400);
 });
 
 test('重复预算：普通项目不受影响', () => {
@@ -496,14 +498,14 @@ test("重复预算：计入结余，后续要留的钱体现在结余里", () =>
   };
   const s = core.summarize(month, 0, new Date(2026, 2, 16, 12));
   assert.equal(s.plannedTotal, 4030);
-  assert.equal(s.paidTotal, 1950, '已经过掉的天数自动算作已花');
-  assert.equal(s.remainingBudget, 2080, '后续还需要留的预算');
-  assert.equal(s.actualBalance, 6050);
+  assert.equal(s.paidTotal, 2080, '今天及之前按计划算作已花');
+  assert.equal(s.remainingBudget, 1950, '后续还需要留的预算');
+  assert.equal(s.actualBalance, 5920, '当天也扣了，不会显得结余偏高');
   assert.equal(s.plannedBalance, 3970, "8000 − 预算总额 4030");
   assert.equal(s.recurringCount, 1);
   assert.equal(s.recurringDailyTotal, 130);
-  assert.equal(s.recurringSpentTotal, 1950);
-  assert.equal(s.recurringRemainingTotal, 2080);
+  assert.equal(s.recurringSpentTotal, 2080);
+  assert.equal(s.recurringRemainingTotal, 1950);
 });
 
 test('重复预算：手动结算后按实际金额算', () => {
@@ -555,13 +557,13 @@ test('每日结算：某天少花，省下的钱立刻回到结余里', () => {
 
   const before = store.summary(MARCH, NOW);
   assert.equal(before.plannedBalance, 3970, '8000 − 整月计划 4030');
-  assert.equal(before.actualBalance, 6050, '8000 − 已过 15 天 × 130');
+  assert.equal(before.actualBalance, 5920, '8000 − 16 天（含当天）× 130');
 
   store.setRecurringDayActual(item.id, '2026-03-05', 80, MARCH);
   const after = store.summary(MARCH, NOW);
-  assert.equal(after.recurringSpentTotal, 1900, '1950 − 少花的 50');
-  assert.equal(after.recurringRemainingTotal, 2080, '后续还要预留的不变');
-  assert.equal(after.actualBalance, 6100, '手里多了 50');
+  assert.equal(after.recurringSpentTotal, 2030, '2080 − 少花的 50');
+  assert.equal(after.recurringRemainingTotal, 1950, '后续还要预留的不变');
+  assert.equal(after.actualBalance, 5970, '手里多了 50');
   assert.equal(after.plannedBalance, 4020, '这笔预算的承诺额少了 50');
   assert.equal(after.savedTotal, 50);
   assert.equal(after.unspentBudget, after.committedBudget - after.paidTotal);
@@ -580,15 +582,15 @@ test('每日结算：某天花超，超出的钱从结余里扣', () => {
 
   store.setRecurringDayActual(item.id, '2026-03-06', 200, MARCH);
   const after = store.summary(MARCH, NOW);
-  assert.equal(after.recurringSpentTotal, 2020, '1950 + 超支 70');
-  assert.equal(after.recurringRemainingTotal, 2080);
-  assert.equal(after.actualBalance, 5980);
+  assert.equal(after.recurringSpentTotal, 2150, '2080 + 超支 70');
+  assert.equal(after.recurringRemainingTotal, 1950);
+  assert.equal(after.actualBalance, 5850);
   assert.equal(after.plannedBalance, 3900, '8000 − 承诺额 4100');
   assert.equal(after.overrunTotal, 70);
   assert.equal(core.itemCommittedAmount(store.item(item.id, MARCH), NOW), 4100);
 });
 
-test('每日结算：结算「今天」后，今天不再算进待预留', () => {
+test('每日结算：当天先按计划记入，填了实际金额就按实际算', () => {
   const store = createStore();
   store.setIncome(8000, MARCH);
   const item = store.addItem({
@@ -599,8 +601,9 @@ test('每日结算：结算「今天」后，今天不再算进待预留', () =>
   }, MARCH);
   const NOW = new Date(2026, 2, 16, 20);
   const scheduleBefore = core.recurrenceSchedule(store.item(item.id, MARCH), NOW);
-  assert.equal(scheduleBefore.remainingDays, 16, '今天还没结算，算进待预留');
-  assert.equal(scheduleBefore.remainingAmount, 1600);
+  assert.equal(scheduleBefore.remainingDays, 15, '待预留只算明天起');
+  assert.equal(scheduleBefore.remainingAmount, 1500);
+  assert.equal(scheduleBefore.spentSoFar, 1600, '当天先按计划记入');
 
   store.setRecurringDayActual(item.id, '2026-03-16', 60, MARCH);
   const scheduleAfter = core.recurrenceSchedule(store.item(item.id, MARCH), NOW);
@@ -622,9 +625,9 @@ test('每日结算：取消某天的记录会恢复按计划推算', () => {
   const NOW = new Date(2026, 2, 16, 12);
 
   store.setRecurringDayActual(item.id, '2026-03-05', 20, MARCH);
-  assert.equal(store.summary(MARCH, NOW).recurringSpentTotal, 1420);
+  assert.equal(store.summary(MARCH, NOW).recurringSpentTotal, 1520);
   store.setRecurringDayActual(item.id, '2026-03-05', null, MARCH);
-  assert.equal(store.summary(MARCH, NOW).recurringSpentTotal, 1500, '恢复成 15 天 × 100');
+  assert.equal(store.summary(MARCH, NOW).recurringSpentTotal, 1600, '恢复成 16 天 × 100');
   assert.equal(store.summary(MARCH, NOW).savedTotal, 0);
 });
 
@@ -639,8 +642,8 @@ test('每日结算：填了未来的某天也会按实际算（用于提前知�
   const schedule = core.recurrenceSchedule(item, now);
   assert.equal(schedule.days.find(d => d.date === '2026-03-20').status, 'settled');
   assert.equal(schedule.overrunSoFar, 200);
-  assert.equal(schedule.remainingAmount, 1500, '20 号那天已经不是待预留（今天是 16 号）');
-  assert.equal(schedule.remainingDays, 15);
+  assert.equal(schedule.remainingAmount, 1400, '20 号那天已经不是待预留（今天是 16 号）');
+  assert.equal(schedule.remainingDays, 14);
 });
 
 test('每日结算：逐天状态正确（已结算 / 按计划推算 / 待预留）', () => {
@@ -659,12 +662,12 @@ test('每日结算：逐天状态正确（已结算 / 按计划推算 / 待预�
   assert.equal(byDate['2026-03-03'].diff, -40);
   assert.equal(byDate['2026-03-02'].status, 'estimated');
   assert.equal(byDate['2026-03-02'].actual, null);
-  assert.equal(byDate['2026-03-16'].status, 'pending');
+  assert.equal(byDate['2026-03-16'].status, 'estimated', '当天按计划记入');
   assert.equal(byDate['2026-03-16'].isToday, true);
   assert.equal(byDate['2026-03-20'].status, 'pending');
   assert.equal(schedule.plannedAmount, 3100);
-  assert.equal(schedule.spentSoFar, 1500 - 40, '15 天计划 1500，3 号实际少了 40');
-  assert.equal(schedule.remainingAmount, 1600);
+  assert.equal(schedule.spentSoFar, 1600 - 40, '16 天计划 1600，3 号实际少了 40');
+  assert.equal(schedule.remainingAmount, 1500);
   assert.equal(schedule.savedSoFar, 40);
   assert.equal(schedule.plannedAmount, schedule.committedAmount + schedule.savedSoFar);
 });
@@ -925,6 +928,128 @@ test('预支：可以指定归属月份，也可以不给下个月', () => {
 });
 
 // ---------------------------------------------------------------- 备份提醒
+
+// ---------------------------------------------------------------- 分次结算
+
+test('排序：预算未完成在前（按计划金额降序），已完成在后（按实际金额降序）', () => {
+  const store = createStore();
+  store.setIncome(10000, MARCH);
+  const phone = store.addItem({ name: '话费', category: 'communication', plannedAmount: 100 }, MARCH);
+  const rent = store.addItem({ name: '房租', category: 'housing', plannedAmount: 2500 }, MARCH);
+  const food = store.addItem({ name: '餐饮', category: 'food', plannedAmount: 1200 }, MARCH);
+
+  assert.deepEqual(store.items(MARCH).map(i => i.name), ['房租', '餐饮', '话费'], '未完成按计划金额从大到小');
+
+  store.addItemPayment(rent.id, { amount: 2500, date: day(2026, 3, 3) }, MARCH);
+  store.addItemPayment(phone.id, { amount: 100, date: day(2026, 3, 4) }, MARCH);
+  assert.deepEqual(store.items(MARCH).map(i => i.name), ['餐饮', '房租', '话费'],
+    '未完成的餐饮排最前，两个已完成按实际金额从大到小');
+});
+
+test('排序：预支未收回在前，已收回在后，同组按日期从新到旧', () => {
+  const store = createStore();
+  store.setIncome(10000, MARCH);
+  const settledOld = store.addAdvance({ title: '已收回的旧账', amount: 200, date: day(2026, 3, 1) }, MARCH);
+  const openNew = store.addAdvance({ title: '未收回的新的', amount: 300, date: day(2026, 3, 20) }, MARCH);
+  const openOld = store.addAdvance({ title: '未收回的旧的', amount: 400, date: day(2026, 3, 5) }, MARCH);
+  const settledNew = store.addAdvance({ title: '已收回的新账', amount: 500, date: day(2026, 3, 25) }, MARCH);
+
+  store.repayAdvance(settledOld.id, 200, MARCH);
+  store.repayAdvance(settledNew.id, 500, MARCH);
+
+  assert.deepEqual(store.advances(MARCH).map(a => a.title),
+    ['未收回的新的', '未收回的旧的', '已收回的新账', '已收回的旧账']);
+  void openNew; void openOld; void settledNew;
+});
+
+test('排序：记账按日期从新到旧', () => {
+  const store = createStore();
+  store.addEntry({ title: '3 号', amount: 1, category: 'other', date: day(2026, 3, 3) }, MARCH);
+  store.addEntry({ title: '20 号', amount: 1, category: 'other', date: day(2026, 3, 20) }, MARCH);
+  store.addEntry({ title: '10 号', amount: 1, category: 'other', date: day(2026, 3, 10) }, MARCH);
+  assert.deepEqual(store.entries(MARCH).map(e => e.title), ['20 号', '10 号', '3 号']);
+});
+
+test('分次结算：一个项目分几笔付完，每笔都有自己的金额和日期', () => {
+  const store = createStore();
+  store.setIncome(8000, MARCH);
+  const item = store.addItem({ name: '装修', category: 'housing', plannedAmount: 3000 }, MARCH);
+
+  const first = store.addItemPayment(item.id, { amount: 1000, date: day(2026, 3, 5) }, MARCH);
+  assert.equal(first.finished, false);
+  assert.equal(first.remaining, 2000);
+
+  const afterFirst = store.summary(MARCH, new Date(2026, 2, 5));
+  assert.equal(afterFirst.paidTotal, 1000, '已付 1000');
+  assert.equal(afterFirst.remainingBudget, 2000, '剩下的 2000 才算还要预留');
+  assert.equal(afterFirst.actualBalance, 7000);
+  assert.equal(afterFirst.plannedBalance, 5000, '结余仍按整笔计划 3000 扣');
+  assert.equal(afterFirst.unspentBudget, 2000);
+
+  const second = store.addItemPayment(item.id, { amount: 1200, date: day(2026, 3, 12) }, MARCH);
+  assert.equal(second.remaining, 800);
+  assert.equal(store.item(item.id, MARCH).status, 'planned', '还没付完，仍算计划中');
+  assert.equal(store.summary(MARCH).paidTotal, 2200);
+
+  const third = store.addItemPayment(item.id, { amount: 800, date: day(2026, 3, 20) }, MARCH);
+  assert.equal(third.finished, true, '付满自动标记完成');
+  const settled = store.item(item.id, MARCH);
+  assert.equal(settled.status, 'completed');
+  assert.equal(settled.payments.length, 3);
+  assert.equal(core.itemPaymentsTotal(settled), 3000);
+  assert.equal(store.summary(MARCH).remainingBudget, 0);
+  assert.equal(store.summary(MARCH).actualBalance, 5000);
+});
+
+test('分次结算：删掉一笔会重算已付；状态要自己改（撤销结算）', () => {
+  const store = createStore();
+  store.setIncome(8000, MARCH);
+  const item = store.addItem({ name: '装修', category: 'housing', plannedAmount: 3000 }, MARCH);
+  store.addItemPayment(item.id, { amount: 1000, date: day(2026, 3, 5) }, MARCH);
+  const second = store.addItemPayment(item.id, { amount: 2000, date: day(2026, 3, 9) }, MARCH);
+  assert.equal(store.item(item.id, MARCH).status, 'completed');
+
+  store.deleteItemPayment(item.id, second.payment.id, MARCH);
+  assert.equal(store.summary(MARCH).paidTotal, 1000, '删掉那笔后已付回到 1000');
+  assert.equal(store.item(item.id, MARCH).payments.length, 1);
+  assert.equal(store.summary(MARCH).remainingBudget, 0, '项目仍是「已完成」，不再预留');
+  assert.equal(store.summary(MARCH).savedTotal, 2000, '视作省下 2000');
+
+  store.reopenItem(item.id, MARCH);
+  assert.equal(store.summary(MARCH).remainingBudget, 2000, '改回计划中后，剩下的 2000 继续预留');
+  assert.equal(store.summary(MARCH).paidTotal, 1000);
+});
+
+test('分次结算：可以手动标记完成（剩下的不打算再花）', () => {
+  const store = createStore();
+  store.setIncome(8000, MARCH);
+  const item = store.addItem({ name: '装修', category: 'housing', plannedAmount: 3000 }, MARCH);
+  store.addItemPayment(item.id, { amount: 2500, date: day(2026, 3, 5) }, MARCH);
+
+  store.markItemCompleted(item.id, MARCH);
+  const settled = store.item(item.id, MARCH);
+  assert.equal(settled.status, 'completed');
+  const s = store.summary(MARCH);
+  assert.equal(s.paidTotal, 2500, '按实际付掉的算');
+  assert.equal(s.remainingBudget, 0, '不再预留');
+  assert.equal(s.savedTotal, 500, '比计划省下 500');
+  assert.equal(s.actualBalance, 5500);
+});
+
+test('分次结算：撤销结算不会丢掉付款记录', () => {
+  const store = createStore();
+  store.setIncome(8000, MARCH);
+  const item = store.addItem({ name: '装修', category: 'housing', plannedAmount: 3000 }, MARCH);
+  store.addItemPayment(item.id, { amount: 3000, date: day(2026, 3, 5) }, MARCH);
+  assert.equal(store.item(item.id, MARCH).status, 'completed');
+
+  store.reopenItem(item.id, MARCH);
+  const reopened = store.item(item.id, MARCH);
+  assert.equal(reopened.status, 'planned');
+  assert.equal(reopened.payments.length, 1, '付款记录还在');
+  assert.equal(store.summary(MARCH).paidTotal, 3000);
+  assert.equal(store.summary(MARCH).remainingBudget, 0);
+});
 
 test('备份提醒：从没备份过会提醒，导出后 7 天内不再提醒', () => {
   const store = createStore();
