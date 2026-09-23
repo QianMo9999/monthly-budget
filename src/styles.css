@@ -572,6 +572,9 @@ main { padding: 4px 12px 24px; max-width: 720px; margin: 0 auto; }
   min-width: 0;
   max-width: 100%;
   box-sizing: border-box;
+  /* 清空后 iOS 上不再显示年月日，容易被压成一条细框，这里固定高度 */
+  min-height: 46px;
+  line-height: 1.4;
 }
 
 .field input[type="date"]::-webkit-date-and-time-value,

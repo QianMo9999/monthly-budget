@@ -823,7 +823,10 @@
       overrides: recurring ? Object.assign({}, item.recurrence.overrides || {}) : {},
       /* 每天明细默认收起：不然一个月 31 行，每次保存都要滑很久 */
       daysExpanded: false,
-      dueDate: item && item.dueDate ? toDateInputValue(item.dueDate) : '',
+      // 新建时截止日期默认今天（空着的话在手机上会显示成很扁的一条）
+      dueDate: item
+        ? (item.dueDate ? toDateInputValue(item.dueDate) : '')
+        : todayISO(),
       note: item ? item.note : '',
       status: item ? item.status : 'planned'
     };
@@ -1011,7 +1014,8 @@
       '<div class="field"><label>分类</label>' + categoryChips(draft.category, 'item-category') + '</div>' +
       (draft.mode === 'fixed'
         ? '<div class="field"><label>截止日期（可选）</label>' +
-          '<input id="item-due" type="date" value="' + esc(draft.dueDate) + '"></div>'
+          '<input id="item-due" type="date" value="' + esc(draft.dueDate) + '">' +
+          '<div class="hint">默认今天；不需要就清空，留空表示没有截止日期。</div></div>'
         : '') +
       '<div class="field"><label>备注（可选）</label>' +
       '<input id="item-note" type="text" placeholder="例如：含物业费" value="' + esc(draft.note) + '"></div>' +
@@ -1955,6 +1959,10 @@
       checkNoOverflow('新增预算面板');
       checkInputsInside('新增预算面板', $('sheet'));
       checkBodyLocked('新增预算面板');
+      check('截止日期默认今天', $('item-due').value === todayISO(), $('item-due').value);
+      check('截止日期框有正常高度（不会被压扁）',
+        $('item-due').getBoundingClientRect().height >= 40,
+        Math.round($('item-due').getBoundingClientRect().height) + 'px');
       $('item-name').value = '房租';
       $('item-amount').value = '2500';
       $('sheet').querySelector('[data-chip-value="housing"]').click();
