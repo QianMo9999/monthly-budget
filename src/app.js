@@ -685,8 +685,19 @@
     if (s.advanceIncomingTotal > 0) {
       headerParts.push('上月转入 ' + Money.format(s.advanceIncomingTotal));
     }
+    // 更早月份登记、至今还没到扣款日的预支：在本月也要看得见
+    const carriedHTML = (s.advanceCarriedReservations || []).length === 0 ? '' :
+      '<div class="list" style="margin-bottom:12px">' +
+      s.advanceCarriedReservations.map(function (advance) {
+        return '<div class="row"><div class="avatar">⏳</div>' +
+          '<div class="main"><div class="title">上月（或更早）为「' + esc(advance.title) + '」预留</div>' +
+          '<div class="sub">' + toDateInputValue(advance.date) + ' 才扣款：这笔钱还在卡里（算在实际剩余里），' +
+          '但它是留给那个月的，所以从本月结余里减掉</div></div>' +
+          '<div class="amount muted">' + Money.format(core.advanceOutstanding(advance)) + '</div></div>';
+      }).join('') + '</div>';
     area.innerHTML =
       '<div class="section-title"><span>预支（提前为后面月份花钱 / 预留）</span><span>' + esc(headerParts.join(' · ')) + '</span></div>' +
+      carriedHTML +
       (s.advanceIncomingTotal > 0
         ? '<div class="list" style="margin-bottom:12px"><div class="row"><div class="avatar">↩️</div>' +
           '<div class="main"><div class="title">上月已提前支付</div>' +

@@ -14,7 +14,7 @@
   'use strict';
 
   /** App 版本号：改了功能就 +1，设置里能看到，用来确认线上是否已更新 */
-  const VERSION = 'v1.6.1';
+  const VERSION = 'v1.6.2';
 
   // ---------------------------------------------------------------- 金额
   // 内部一律按“分”做整数运算，避免 0.1 + 0.2 这类浮点误差。
@@ -752,6 +752,9 @@
       advancePaidTotal: advancePaidTotal,
       advanceReservedTotal: advanceReservedTotal,
       advanceReservedThisMonth: reservedThisMonth,
+      /* 更早月份登记、至今还没到扣款日的预支（用于在归属月把它们列出来） */
+      advanceCarriedReservations: pendingReservations || [],
+      advanceCarriedTotal: Money.round(carriedReservations),
       advancePendingCount: advances.filter(function (advance) {
         return !advanceIsPaid(advance, reference);
       }).length,

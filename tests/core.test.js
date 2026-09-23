@@ -999,6 +999,32 @@ test('预支：真的花了（9 月买了 10 月的车票）就当场扣实际�
   assert.equal(8000 + 8000 - 700, aprilAfter.actualBalance, '两个月收入 − 一次车票');
 });
 
+test('预支综合：9 月付车票 + 给 11 月预留，10 月的数字要对得上', () => {
+  const SEP = { year: 2026, month: 9 };
+  const OCT = { year: 2026, month: 10 };
+  const NOV = { year: 2026, month: 11 };
+  const store = createStore();
+  store.setIncome(1200, SEP);      // 9 月：付掉 700 车票、为 11 月预留 500
+  store.setIncome(8800, OCT);      // 10 月收入 8800
+  store.ensureMonth(NOV);
+  store.addAdvance({ title: '10 月的车票', amount: 700, date: day(2026, 8, 10), targetYear: 2026, targetMonth: 10 }, SEP);
+  store.addAdvance({ title: '11 月 3 日要扣的钱', amount: 500, date: day(2026, 10, 3), targetYear: 2026, targetMonth: 11 }, SEP);
+  const now = new Date(2026, 8, 24, 12);
+
+  const before = store.summary(OCT, now);
+  assert.equal(before.carryOver, 500, '9 月剩下的 500（预留的 500 没花掉，一直在卡里）');
+  assert.equal(before.actualBalance, 10000, '8800 + 500 结转 + 700 上月已付')
+  assert.equal(before.plannedBalance, 9500, '实际剩余 − 预支待预留 500');
+
+  const ticket = store.addItem({ name: '车票', category: 'transport', plannedAmount: 700 }, OCT);
+  store.completeItem(ticket.id, 700, OCT);
+  const after = store.summary(OCT, now);
+  assert.equal(after.actualBalance, 9300, '记成已付款后：卡里实际就是 9300');
+  assert.equal(after.plannedBalance, 8800, '结余 = 实际剩余 9300 − 预支预留 500 − 当月剩余预算 0');
+  assert.equal(after.advanceReservedTotal, 500, '11 月那笔预留仍然挂着');
+  assert.equal(after.plannedBalance + after.advanceReservedTotal + after.unspentBudget, after.actualBalance);
+});
+
 // ---------------------------------------------------------------- 备份提醒
 
 // ---------------------------------------------------------------- 分次结算
