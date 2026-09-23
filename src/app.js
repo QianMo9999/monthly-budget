@@ -379,7 +379,9 @@
       (summary.ledgerTotal > 0 ? '<span>零星支出 <strong>−' + Money.format(summary.ledgerTotal) + '</strong></span>' : '') +
       (summary.advancePaidTotal > 0 ? '<span>预支 <strong>−' + Money.format(summary.advancePaidTotal) + '</strong></span>' : '') +
       (summary.advanceReservedTotal > 0 ? '<span>预支待预留 <strong>−' + Money.format(summary.advanceReservedTotal) + '</strong></span>' : '') +
-      (summary.advanceIncomingTotal > 0 ? '<span>上月预支转入 <strong>+' + Money.format(summary.advanceIncomingTotal) + '</strong></span>' : '');
+      (summary.advanceIncomingTotal > 0
+        ? '<span>上月已付预支 <strong>' + Money.format(summary.advanceIncomingTotal) + '</strong>（不用再列预算）</span>'
+        : '');
   }
 
   function tile(label, value, hint, tone, action) {
@@ -433,9 +435,9 @@
       ''
     ));
     tiles.push(tile(
-      '预支（已支付）',
+      '预支（已花掉）',
       Money.format(s.advancePaidTotal),
-      s.advanceCount === 0 ? '没有预支' : ('共登记 ' + s.advanceCount + ' 笔 · 已收回 ' + Money.format(s.advanceRepaidTotal)),
+      s.advanceCount === 0 ? '没有预支' : ('共登记 ' + s.advanceCount + ' 笔'),
       s.advancePaidTotal > 0 ? 'warn' : ''
     ));
     if (s.advanceReservedTotal > 0) {
@@ -448,10 +450,10 @@
     }
     if (s.advanceIncomingTotal > 0) {
       tiles.push(tile(
-        '上月预支转入',
-        '+' + Money.format(s.advanceIncomingTotal),
-        s.advanceIncomingCount + ' 笔 · 上个月已经替你付过',
-        'good'
+        '上月已提前支付',
+        Money.format(s.advanceIncomingTotal),
+        s.advanceIncomingCount + ' 笔 · 上个月已付过，本月不用再列预算',
+        ''
       ));
     }
 
@@ -659,26 +661,21 @@
       const settled = outstanding === 0;
       const paid = core.advanceIsPaid(advance, new Date());
       const target = core.advanceTargetKey(advance);
-      const subParts = [paid ? '付款 ' + toDateInputValue(advance.date) : toDateInputValue(advance.date) + ' 才付款',
+      const subParts = [paid ? '扣款 ' + toDateInputValue(advance.date) : toDateInputValue(advance.date) + ' 才扣款',
         '归属 ' + Month.label(target)];
       if (!settled && !paid) subParts.push('钱还在手里，先占结余');
-      if (advance.repaidAmount > 0) subParts.push('已收回 ' + Money.format(advance.repaidAmount));
       if (advance.note) subParts.push(advance.note);
 
-      const statusBadge = settled
-        ? '<span class="badge done">已收回</span> '
-        : (paid
-          ? '<span class="badge advance">已支付</span> '
-          : '<span class="badge plan">待预留</span> ');
+      const statusBadge = paid
+        ? '<span class="badge advance">已支付</span> '
+        : '<span class="badge plan">待预留</span> ';
 
       return '<div class="row tappable" data-edit-advance="' + advance.id + '">' +
-        '<div class="avatar">' + (settled ? '✅' : '🗓️') + '</div>' +
+        '<div class="avatar">🗓️</div>' +
         '<div class="main"><div class="title">' + esc(advance.title) + '</div>' +
         '<div class="sub">' + statusBadge + esc(subParts.join(' · ')) + '</div></div>' +
         '<div class="row-actions">' +
-        '<div class="amount ' + (settled ? 'muted' : 'spend') + '">' +
-        (settled ? Money.format(advance.amount) : Money.format(outstanding)) + '</div>' +
-        (settled ? '' : '<button class="mini-btn warn" data-repay="' + advance.id + '">收回</button>') +
+        '<div class="amount spend">' + Money.format(outstanding) + '</div>' +
         '</div></div>';
     }).join('');
 
@@ -689,12 +686,13 @@
       headerParts.push('上月转入 ' + Money.format(s.advanceIncomingTotal));
     }
     area.innerHTML =
-      '<div class="section-title"><span>预支（提前支付）</span><span>' + esc(headerParts.join(' · ')) + '</span></div>' +
+      '<div class="section-title"><span>预支（提前为后面月份花钱 / 预留）</span><span>' + esc(headerParts.join(' · ')) + '</span></div>' +
       (s.advanceIncomingTotal > 0
         ? '<div class="list" style="margin-bottom:12px"><div class="row"><div class="avatar">↩️</div>' +
-          '<div class="main"><div class="title">上月预支转入</div>' +
-          '<div class="sub">' + s.advanceIncomingCount + ' 笔，上个月已经替你付过了，这个月不用再留这笔预算</div></div>' +
-          '<div class="amount income">+' + Money.format(s.advanceIncomingTotal) + '</div></div></div>'
+          '<div class="main"><div class="title">上月已提前支付</div>' +
+          '<div class="sub">' + s.advanceIncomingCount + ' 笔共 ' + Money.format(s.advanceIncomingTotal) +
+          '：上个月已经付过了，本月不用再列这笔预算（钱不会再扣一次）</div></div>' +
+          '<div class="amount muted">' + Money.format(s.advanceIncomingTotal) + '</div></div></div>'
         : '') +
       '<div class="list">' + rows + '</div>';
   }
@@ -1210,18 +1208,19 @@
     const editing = !!advance;
     const target = advance ? core.advanceTargetKey(advance) : Month.next(currentKey);
     const html =
-      '<h2>' + (editing ? '编辑预支' : '新增预支（提前支付）') + '</h2>' +
+      '<h2>' + (editing ? '编辑预支' : '新增预支') + '</h2>' +
       '<div class="hint" style="margin-bottom:12px">这个月买的、但属于下个月的开销（车票、学费、订阅…）：钱从本月出，' +
-      '下个月会自动带一笔「上月预支转入」，不会重复扣。</div>' +
+      '付款日到了就从实际剩余里扣；还没到就只占结余（先预留）。归属月份会标注「上月已提前支付」，不会再扣一遍。</div>' +
       '<div class="field"><label>买了什么</label>' +
       '<input id="advance-title" type="text" placeholder="例如：下个月的车票" value="' + esc(advance ? advance.title : '') + '"></div>' +
       '<div class="field"><label>金额</label>' +
       '<div class="amount-input"><span class="prefix">¥</span>' +
       '<input id="advance-amount" type="text" inputmode="decimal" placeholder="0.00" value="' +
       (advance ? esc(Money.plain(advance.amount)) : '') + '"></div></div>' +
-      '<div class="field"><label>付款日期</label>' +
+      '<div class="field"><label>扣款日</label>' +
       '<input id="advance-date" type="date" value="' +
-      (advance ? toDateInputValue(advance.date) : todayISO()) + '"></div>' +
+      (advance ? toDateInputValue(advance.date) : todayISO()) + '">' +
+      '<div class="hint">这笔钱预计哪天从卡里扣（或已经花了）。</div></div>' +
       '<div class="field"><label>这笔钱算在哪个月</label>' +
       '<div class="stepper">' +
       '<button type="button" class="icon-btn" data-target-step="-1">‹</button>' +
@@ -1229,8 +1228,9 @@
       '<button type="button" class="icon-btn" data-target-step="1">›</button>' +
       '<span class="hint" style="margin:0 0 0 8px">默认下个月</span>' +
       '</div>' +
-      '<div class="hint">到了这个月，App 会自动显示「上月预支转入 ＋' +
-      (advance ? Money.format(core.advanceOutstanding(advance)) : '金额') + '」。</div></div>' +
+      '<div class="hint">到了这个月，App 会在那个月标注「上月已提前支付' +
+      (advance ? ' ' + Money.format(core.advanceOutstanding(advance)) : '') +
+      '」，提醒你不用再列一遍预算（钱不会重复扣）。</div></div>' +
       '<div class="field"><label>备注（可选）</label>' +
       '<input id="advance-note" type="text" placeholder="例如：月底报销" value="' + esc(advance ? advance.note : '') + '"></div>' +
       '<div class="sheet-actions">' +
@@ -1244,25 +1244,6 @@
       targetYear: target.year,
       targetMonth: target.month
     });
-  }
-
-  function openRepaySheet(advanceId) {
-    const advance = store.advance(advanceId, currentKey);
-    if (!advance) return;
-    const outstanding = core.advanceOutstanding(advance);
-    const html =
-      '<h2>收回 / 退款</h2>' +
-      '<div class="stat-line"><span class="k">' + esc(advance.title) + '</span><span class="v">' + Money.format(advance.amount) + '</span></div>' +
-      '<div class="stat-line"><span class="k">已经提前付出去</span><span class="v">' + Money.format(outstanding) + '</span></div>' +
-      '<div class="field" style="margin-top:14px"><label>这次收回了多少</label>' +
-      '<div class="amount-input"><span class="prefix">¥</span>' +
-      '<input id="repay-amount" type="text" inputmode="decimal" value="' + esc(Money.plain(outstanding)) + '"></div>' +
-      '<div class="hint">退票、报销到账这类钱回来了就填这里；收回后本月结余会跟着回升，下个月的转入也相应减少。</div></div>' +
-      '<div class="sheet-actions">' +
-      '<button class="btn" data-action="close">取消</button>' +
-      '<button class="btn primary" data-action="confirm-repay">确认收回</button>' +
-      '</div>';
-    openSheet(html, { kind: 'repay', advanceId: advanceId });
   }
 
   function openIncomeSheet() {
@@ -1534,12 +1515,11 @@
 
   // 列表内的点击（编辑 / 结算 / 归还 / 空状态引导）
   $('listArea').addEventListener('click', function (event) {
-    const target = event.target.closest('[data-settle],[data-settle-day],[data-pay],[data-repay],[data-edit-item],[data-edit-entry],[data-edit-advance],[data-empty-action]');
+    const target = event.target.closest('[data-settle],[data-settle-day],[data-pay],[data-edit-item],[data-edit-entry],[data-edit-advance],[data-empty-action]');
     if (!target) return;
     const settle = target.getAttribute('data-settle');
     const settleDay = target.getAttribute('data-settle-day');
     const pay = target.getAttribute('data-pay');
-    const repay = target.getAttribute('data-repay');
     const editItem = target.getAttribute('data-edit-item');
     const editEntry = target.getAttribute('data-edit-entry');
     const editAdvance = target.getAttribute('data-edit-advance');
@@ -1548,7 +1528,6 @@
     if (settle) { openSettleSheet(settle); return; }
     if (settleDay) { openDaySheet(settleDay); return; }
     if (pay) { openPaymentSheet(pay); return; }
-    if (repay) { openRepaySheet(repay); return; }
     if (editItem) { openItemSheet(editItem); return; }
     if (editEntry) { openEntrySheet(editEntry); return; }
     if (editAdvance) { openAdvanceSheet(editAdvance); return; }
@@ -1739,15 +1718,6 @@
         store.completeItem(sheetState.itemId, amount, currentKey);
         closeSheet();
         toast('已结算，计入本月结余');
-        render();
-        break;
-      }
-      case 'confirm-repay': {
-        const amount = Money.parse(valueOf('repay-amount'));
-        if (amount === null || amount <= 0) { toast('请填写正确的金额'); return; }
-        const applied = store.repayAdvance(sheetState.advanceId, amount, currentKey);
-        closeSheet();
-        toast(applied > 0 ? '已归还 ' + Money.format(applied) : '这笔预支已经结清');
         render();
         break;
       }
@@ -2018,7 +1988,8 @@
       checkNoOverflow('预支面板');
       checkInputsInside('预支面板', $('sheet'));
       checkBodyLocked('预支面板');
-      check('预支表单说明是「提前支付下个月」', $('sheet').textContent.includes('下个月会自动带一笔'));
+      check('预支表单说明了两种情形',
+        $('sheet').textContent.includes('只占结余') && $('sheet').textContent.includes('不会再扣一遍'));
       $('advance-title').value = '下个月的车票';
       $('advance-amount').value = '700';
       check('归属月份默认下个月',
@@ -2033,13 +2004,8 @@
         Money.plain(store.summary(currentKey).actualBalance));
       check('预支不算本月的零星支出', store.summary(currentKey).ledgerTotal === 18.5);
       check('列表显示归属月份', rowText().includes('归属'), rowText().slice(0, 40));
-      check('列表出现收回按钮', !!$('listArea').querySelector('[data-repay]'));
-
-      $('listArea').querySelector('[data-repay]').click();
-      $('repay-amount').value = '200';
-      $('sheet').querySelector('[data-action="confirm-repay"]').click();
-      check('收回 200 后只占用 500', store.summary(currentKey).advanceOutstandingTotal === 500);
-      check('收回后列表显示已收回', rowText().includes('已收回'));
+      check('预支列表没有「还款/收回」按钮（预支不是借款）',
+        !$('listArea').querySelector('[data-repay]'));
 
       // —— 付款日在未来的预支：只占结余，不扣实际剩余 ——
       // 用「真实今天 + 40 天」保证真的是未来日期（当前月份可能是历史月份）
@@ -2062,9 +2028,13 @@
       check('列表里显示「待预留」', rowText().includes('待预留'));
 
       click('nextMonth');
-      check('下个月自动带入上月预支', store.summary(currentKey).advanceIncomingTotal === 500,
+      check('下个月会标注「上月已提前支付」', store.summary(currentKey).advanceIncomingTotal === 700,
         Money.plain(store.summary(currentKey).advanceIncomingTotal));
-      check('概览有「上月预支转入」卡片', $('statTiles').textContent.includes('上月预支转入'));
+      check('概览有「上月已提前支付」提示', $('statTiles').textContent.includes('上月已提前支付'));
+      const nextMonthSummary = store.summary(currentKey);
+      check('下个月不会因为这笔预支被重复扣',
+        Money.cents(nextMonthSummary.actualBalance) === Money.cents(nextMonthSummary.income + nextMonthSummary.carryOver),
+        Money.plain(nextMonthSummary.actualBalance) + ' vs ' + Money.plain(nextMonthSummary.income + nextMonthSummary.carryOver));
       click('prevMonth');
       check('回到 3 月', $('monthLabel').textContent === '2026年3月');
 
@@ -2112,8 +2082,8 @@
       click('nextMonth');
       check('关闭弹层后背景解除锁定', !document.body.classList.contains('sheet-open'));
       check('切到 4 月', $('monthLabel').textContent === '2026年4月', $('monthLabel').textContent);
-      // 3 月：收入 8000 − 房租 2400 − 奶茶 18.5 − 提前支付的车票未收回 500 = 5081.5
-      check('4 月自动结转 5081.5', store.summary(currentKey).carryOver === 5081.5, String(store.summary(currentKey).carryOver));
+      // 3 月：收入 8000 − 房租 2400 − 奶茶 18.5 − 预支的车票 700 = 4881.5
+      check('4 月自动结转 4881.5', store.summary(currentKey).carryOver === 4881.5, String(store.summary(currentKey).carryOver));
       click('monthLabel');
       check('月份选择器打开', !!$('pick-year'));
       $('sheet').querySelector('[data-month="3"]').click();
@@ -2224,7 +2194,8 @@
       check('超支后结余口径仍然成立',
         Money.cents(afterOverspend.plannedBalance) === Money.cents(
           afterOverspend.income + afterOverspend.carryOver + afterOverspend.ledgerIncomeTotal
-          - afterOverspend.committedBudget - afterOverspend.ledgerTotal - afterOverspend.advanceOutstandingTotal));
+          - afterOverspend.committedBudget - afterOverspend.ledgerTotal
+          - afterOverspend.advancePaidTotal - afterOverspend.advanceReservedTotal));
       check('超支让承诺额变高',
         Money.cents(afterOverspend.committedBudget) === Money.cents(scheduleAfterToday.committedAmount),
         Money.plain(afterOverspend.committedBudget));
@@ -2306,8 +2277,11 @@
         Money.plain(afterReconcile.plannedBalance) + ' vs ' + Money.plain(beforeReconcile.plannedBalance));
       check('顶部结余跟着变', $('heroValue').textContent === Money.format(afterReconcile.plannedBalance));
       check('概览出现「对账调整」卡片', $('statTiles').textContent.includes('对账调整'));
-      check('结余 + 未花预算 = 实际剩余（对账后仍成立）',
-        Money.cents(afterReconcile.plannedBalance + afterReconcile.unspentBudget) === Money.cents(afterReconcile.actualBalance));
+      check('结余 + 未花预算 + 预支待预留 = 实际剩余（对账后仍成立）',
+        Money.cents(afterReconcile.plannedBalance + afterReconcile.unspentBudget + afterReconcile.advanceReservedTotal)
+          === Money.cents(afterReconcile.actualBalance),
+        Money.plain(afterReconcile.plannedBalance) + ' + ' + Money.plain(afterReconcile.unspentBudget) +
+        ' + ' + Money.plain(afterReconcile.advanceReservedTotal) + ' vs ' + Money.plain(afterReconcile.actualBalance));
 
       $('statTiles').querySelector('[data-reconcile]').click();
       const secondRecord = store.reconcile(targetBalance, currentKey, '再对一次');
@@ -2377,8 +2351,10 @@
       results.push((marchMonth ? 'PASS  ' : 'FAIL  ') + '3 月账期还在');
       results.push((marchMonth && marchMonth.items.some(function (i) { return i.name === '房租'; }) ? 'PASS  ' : 'FAIL  ') + '预算项目「房租」还在');
       results.push((marchMonth && marchMonth.ledgerEntries.some(function (e) { return e.title === '奶茶'; }) ? 'PASS  ' : 'FAIL  ') + '记账「奶茶」还在');
-      results.push((marchMonth && marchMonth.advances.length === 1 ? 'PASS  ' : 'FAIL  ') + '预支记录还在');
-      results.push((marchMonth && marchMonth.advances[0].repaidAmount === 200 ? 'PASS  ' : 'FAIL  ') + '预支归还金额保留');
+      const ticket = marchMonth && marchMonth.advances.find(function (a) { return a.title === '下个月的车票'; });
+      results.push((ticket ? 'PASS  ' : 'FAIL  ') + '预支记录还在');
+      results.push((ticket && ticket.amount === 700 ? 'PASS  ' : 'FAIL  ') + '预支金额保留');
+      results.push((ticket && ticket.targetMonth === 4 ? 'PASS  ' : 'FAIL  ') + '预支归属月份保留');
     } catch (error) {
       results.push('FAIL  读取本地数据出错: ' + error.message);
     }

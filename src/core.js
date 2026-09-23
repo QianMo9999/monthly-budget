@@ -14,7 +14,7 @@
   'use strict';
 
   /** App 版本号：改了功能就 +1，设置里能看到，用来确认线上是否已更新 */
-  const VERSION = 'v1.5.0';
+  const VERSION = 'v1.6.0';
 
   // ---------------------------------------------------------------- 金额
   // 内部一律按“分”做整数运算，避免 0.1 + 0.2 这类浮点误差。
@@ -323,7 +323,7 @@
       id: data.id || uid(),
       title: data.title || '',
       amount: Money.round(data.amount || 0),
-      /* 已收回的金额（退票、报销到账等） */
+      /* 兼容旧数据：预支不再有「还款/收回」的概念，这个字段恒为 0 */
       repaidAmount: Money.round(data.repaidAmount || 0),
       date: date,
       note: data.note || '',
@@ -341,7 +341,7 @@
     return Month.make(advance.targetYear, advance.targetMonth);
   }
 
-  /** 这笔预支「真正提前付出去、还没收回」的钱。 */
+  /** 这笔预支占用的钱（金额减去历史遗留的已收回部分）。 */
   function advanceOutstanding(advance) {
     return Math.max(0, Money.round(advance.amount - advance.repaidAmount));
   }
@@ -649,7 +649,7 @@
   }
 
   /**
-   * 预支排序：未收回的在前，已收回的在后；同一组里按日期从新到旧。
+   * 预支排序：按日期从新到旧。
    */
   function sortedAdvances(month) {
     return month.advances.slice().sort(function (a, b) {
@@ -691,20 +691,29 @@
     const ledgerIncomeTotal = Money.sum(incomeEntries.map(function (e) { return e.amount; }));
     const advanceTotal = Money.sum(advances.map(function (a) { return a.amount; }));
     const advanceRepaidTotal = Money.sum(advances.map(function (a) { return a.repaidAmount; }));
-    /* 本月登记、还没收回的预支合计（含还没到付款日的） */
+    /* 本月登记的预支合计（含还没到扣款日的） */
     const advanceOutstandingTotal = Money.sum(advances.map(advanceOutstanding));
     /* 已经真的付出去了（付款日已到）：扣实际剩余也扣结余 */
     const advancePaidTotal = Money.sum(advances
       .filter(function (advance) { return advanceIsPaid(advance, reference); })
       .map(advanceOutstanding));
-    /* 还没到付款日：像计划中的预算，只占结余、不扣实际剩余 */
+    /*
+     * 还没到扣款日：像计划中的预算 —— 只占结余、不扣实际剩余。
+     * 从登记那个月开始，一直预留到扣款日为止：
+     * 例如 9 月给 11 月的开销预留 500，那么 10 月的实际剩余里仍然有这 500（钱还没花），
+     * 但 10 月的结余里必须减掉这 500（它是留给 11 月的，不能当成本月可花的钱）。
+     */
     const reservedThisMonth = Money.sum(advances
       .filter(function (advance) { return !advanceIsPaid(advance, reference); })
       .map(advanceOutstanding));
-    /* 更早月份登记、至今还没到付款日的预支，也要继续预留 */
     const carriedReservations = Money.sum((pendingReservations || []).map(advanceOutstanding));
     const advanceReservedTotal = Money.round(reservedThisMonth + carriedReservations);
-    /* 上个月替本月提前付掉的钱（归属本月的预支，只有真付了才算） */
+    /*
+     * 归属本月的预支（上个月替本月提前付掉的）。
+     * 注意：这只是「信息」——钱在上个月就已经扣过了，不能再加回本月，
+     * 否则本月的实际剩余会比银行卡里多出这笔钱。它的用处是提醒你：
+     * 这笔开销已经付过，本月不用再列一遍预算。
+     */
     const incoming = incomingAdvances || [];
     const advanceIncomingTotal = Money.sum(incoming
       .filter(function (advance) { return advanceIsPaid(advance, reference); })
@@ -768,8 +777,7 @@
     summary.totalAvailable = Money.round(income + carry + ledgerIncomeTotal);
     /** 不含对账调整的账面余额，也是下次对账的基准。 */
     summary.bookBalance = Money.round(
-      income + carry + ledgerIncomeTotal + advanceIncomingTotal
-      - paidTotal - ledgerTotal - advancePaidTotal
+      income + carry + ledgerIncomeTotal - paidTotal - ledgerTotal - advancePaidTotal
     );
     summary.actualBalance = Money.round(summary.bookBalance + summary.reconciliationAdjustment);
     /**
@@ -781,7 +789,7 @@
     }));
     /** 主结余：把预算先全部留出来之后还剩多少。 */
     summary.plannedBalance = Money.round(
-      income + carry + ledgerIncomeTotal + advanceIncomingTotal - summary.committedBudget
+      income + carry + ledgerIncomeTotal - summary.committedBudget
       - ledgerTotal - advancePaidTotal - advanceReservedTotal + summary.reconciliationAdjustment
     );
     summary.budgetBalance = Money.round(plannedTotal - paidTotal);
@@ -848,6 +856,22 @@
       return month;
     }
 
+    /**
+     * 更早月份登记、到本月还没到扣款日的预支：这些钱要继续预留。
+     * 钱没真出去（实际剩余里还在），但结余里不能算它是可花的。
+     */
+    function pendingReservationsFor(key, now) {
+      const result = [];
+      state.months.forEach(function (month) {
+        const monthKey = { year: month.year, month: month.month };
+        if (Month.compare(monthKey, key) >= 0) return;
+        month.advances.forEach(function (advance) {
+          if (!advanceIsPaid(advance, now)) result.push(advance);
+        });
+      });
+      return result;
+    }
+
     /** 上个月替本月提前付掉的预支（归属月份是本月）。 */
     function incomingAdvancesFor(key) {
       const result = [];
@@ -857,19 +881,6 @@
         if (Month.compare(monthKey, key) >= 0) return;
         month.advances.forEach(function (advance) {
           if (Month.equals(advanceTargetKey(advance), key)) result.push(advance);
-        });
-      });
-      return result;
-    }
-
-    /** 更早月份登记、到本月还没到付款日的预支：这些钱要继续预留（没真付出去，也不在结转里体现） */
-    function pendingReservationsFor(key, now) {
-      const result = [];
-      state.months.forEach(function (month) {
-        const monthKey = { year: month.year, month: month.month };
-        if (Month.compare(monthKey, key) >= 0) return;
-        month.advances.forEach(function (advance) {
-          if (!advanceIsPaid(advance, now)) result.push(advance);
         });
       });
       return result;
@@ -1323,24 +1334,6 @@
         });
       },
 
-      /** 归还 / 报销预支，支持分多次；返回本次实际冲抵金额。 */
-      repayAdvance(id, amount, key, date) {
-        let applied = 0;
-        mutateMonth(key, function (month) {
-          const advance = month.advances.find(function (a) { return a.id === id; });
-          if (!advance) return;
-          const outstanding = advanceOutstanding(advance);
-          if (outstanding <= 0) return;
-          applied = Math.min(outstanding, Money.round(Math.max(0, amount || 0)));
-          advance.repaidAmount = Money.round(advance.repaidAmount + applied);
-          advance.repaidAt = advanceOutstanding(advance) === 0
-            ? (date || new Date().toISOString())
-            : null;
-          advance.updatedAt = new Date().toISOString();
-        });
-        return applied;
-      },
-
       deleteAdvance(id, key) {
         mutateMonth(key, function (month) {
           month.advances = month.advances.filter(function (a) { return a.id !== id; });
@@ -1398,7 +1391,7 @@
             rows.push([
               Month.label(key), '预支', advance.title, '归属 ' + Month.label(target),
               Money.csv(advance.amount), Money.csv(advance.repaidAmount),
-              advanceOutstanding(advance) === 0 ? '已收回' : '已提前支付',
+              advanceIsPaid(advance, new Date()) ? '已支付' : '待预留',
               dateText(advance.date), advance.note
             ]);
           });

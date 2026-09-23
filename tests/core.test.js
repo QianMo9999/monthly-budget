@@ -226,30 +226,6 @@ test('Store：零星记账的增删改与按天分组', () => {
   assert.equal(store.entries(MARCH).length, 2);
 });
 
-test('Store：预支支持分次归还，超额归还按剩余冲抵', () => {
-  const store = createStore();
-  store.setIncome(8000, MARCH);
-  const advance = store.addAdvance({ title: '垫付聚餐', amount: 600, date: day(2026, 3, 5) }, MARCH);
-
-  assert.equal(store.summary(MARCH).advanceOutstandingTotal, 600);
-  assert.equal(store.summary(MARCH).actualBalance, 7400);
-
-  assert.equal(store.repayAdvance(advance.id, 200, MARCH), 200);
-  assert.equal(store.summary(MARCH).advanceOutstandingTotal, 400);
-  assert.equal(store.summary(MARCH).advanceRepaidTotal, 200);
-  assert.equal(store.advance(advance.id, MARCH).repaidAt, null);
-
-  assert.equal(store.repayAdvance(advance.id, 9999, MARCH), 400);
-  assert.equal(store.summary(MARCH).advanceOutstandingTotal, 0);
-  assert.equal(store.summary(MARCH).actualBalance, 8000);
-  assert.ok(store.advance(advance.id, MARCH).repaidAt, '还清后记录归还时间');
-
-  assert.equal(store.repayAdvance(advance.id, 100, MARCH), 0, '已还清时不再冲抵');
-
-  store.updateAdvance(advance.id, { amount: 300 }, MARCH);
-  assert.equal(store.advance(advance.id, MARCH).repaidAmount, 300, '金额调小后已归还金额不超过本金');
-});
-
 test('Store：上月结转、手动覆盖、关闭开关、复制预算', () => {
   const store = createStore();
   store.setIncome(8000, MARCH);
@@ -360,7 +336,7 @@ test('导出：CSV 结构与内容', () => {
   assert.equal(lines[0], '月份,类型,名称,分类,金额,实际支付,状态,日期,备注');
   assert.ok(csv.includes('2026年3月,预算,房租,居住,2500.00,2480.00,已完成,2026-03-06'));
   assert.ok(csv.includes('2026年3月,零星记账,奶茶,餐饮,18.50,,已花,2026-03-03'));
-  assert.ok(csv.includes('2026年3月,预支,垫付,归属 2026年4月,300.00,0.00,已提前支付,2026-03-06'), csv);
+  assert.ok(csv.includes('2026年3月,预支,垫付,归属 2026年4月,300.00,0.00,已支付,2026-03-06'), csv);
   assert.equal(lines.length, 4);
 });
 
@@ -895,30 +871,17 @@ test('预支：本月买下个月的车票，钱从本月出、归属下个月',
   store.ensureMonth(APRIL);
   const april = store.summary(APRIL);
   assert.equal(april.carryOver, 7300, '3 月结转的是实际剩下的钱');
-  assert.equal(april.advanceIncomingTotal, 700, '4 月收到 3 月替它付掉的车票钱');
+  assert.equal(april.advanceIncomingTotal, 700, '只是提示：上个月已经付过这笔');
   assert.equal(april.advanceIncomingCount, 1);
-  assert.equal(april.actualBalance, 16000, '8000 收入 + 7300 结转 + 700 上月预支');
+  assert.equal(april.actualBalance, 15300, '8000 收入 + 7300 结转（钱在 3 月就付掉了，不额外加）');
 
   // 4 月把这 700 列成预算并结算：不会再重复扣一次
   const travel = store.addItem({ name: '车票', category: 'transport', plannedAmount: 700 }, APRIL);
   store.completeItem(travel.id, 700, APRIL);
   const aprilAfter = store.summary(APRIL);
   assert.equal(aprilAfter.paidTotal, 700);
-  assert.equal(aprilAfter.actualBalance, 15300, '16000 − 700，正好是两个月收入减去一次车票');
-  assert.equal(store.summary(MARCH).actualBalance + 8000, aprilAfter.actualBalance, '3 月剩下的钱 + 4 月收入');
-  assert.equal(8000 + 8000 - 700, aprilAfter.actualBalance, '两个月收入 − 一次车票');
-});
-
-test('预支：钱退回来了（收回）就不再占用，下个月也少转入', () => {
-  const store = createStore();
-  store.setIncome(8000, MARCH);
-  const advance = store.addAdvance({ title: '下个月的车票', amount: 700, date: day(2026, 3, 20) }, MARCH);
-  store.ensureMonth(APRIL);
-
-  assert.equal(store.repayAdvance(advance.id, 200, MARCH), 200, '退票收回 200');
-  assert.equal(store.summary(MARCH).actualBalance, 7500, '收回了就还回本月');
-  assert.equal(store.summary(MARCH).advanceOutstandingTotal, 500);
-  assert.equal(store.summary(APRIL).advanceIncomingTotal, 500, '下个月只转入还没收回的 500');
+  assert.equal(aprilAfter.actualBalance, 14600, '往 4 月预算里又记了一次车票 → 这里会再扣 700');
+  assert.equal(store.summary(MARCH).actualBalance + 8000 - 700, aprilAfter.actualBalance, '3 月剩下的钱 + 4 月收入 − 4 月这笔记账');
 });
 
 test('预支：可以指定归属月份，也可以不给下个月', () => {
@@ -961,39 +924,63 @@ test('预支：付款日在未来时只占结余，不扣实际剩余', () => {
   assert.equal(after.advanceReservedTotal, 0);
 });
 
-test('预支：付款日在下下个月时，中间这个月也要继续预留', () => {
+test('预支：预留会一直保留到扣款日（10 月结余减掉，但实际剩余里还有这笔钱）', () => {
+  const store = createStore();
+  const SEP = { year: 2026, month: 9 };
+  const OCT = { year: 2026, month: 10 };
+  const NOV = { year: 2026, month: 11 };
+  [SEP, OCT, NOV].forEach(k => store.setIncome(8000, k));
+  const now = new Date(2026, 8, 24, 12);            // 9 月 24 日登记
+  store.addAdvance({
+    title: '11 月 3 日要扣的钱',
+    amount: 500,
+    date: day(2026, 10, 3),                          // 扣款日 11 月 3 日
+    targetYear: 2026,
+    targetMonth: 11
+  }, SEP);
+
+  const september = store.summary(SEP, now);
+  assert.equal(september.actualBalance, 8000, '钱还在卡里 → 实际剩余不减');
+  assert.equal(september.plannedBalance, 7500, '但结余里先减掉 500（预留）');
+  assert.equal(september.advanceReservedTotal, 500);
+
+  const october = store.summary(OCT, now);
+  assert.equal(october.carryOver, 8000);
+  assert.equal(october.actualBalance, 16000, '10 月的实际剩余里包含这 500（还没花）');
+  assert.equal(october.advanceReservedTotal, 500, '10 月仍然要预留');
+  assert.equal(october.plannedBalance, 15500, '所以 10 月的结余要减掉这 500');
+
+  const november = store.summary(NOV, now);
+  assert.equal(november.actualBalance, 24000);
+  assert.equal(november.plannedBalance, 23500, '扣款日之前也一直留着');
+
+  // 扣款日到了之后：钱真的出去，实际剩余减少，预留解除；全程只扣这一次
+  const later = new Date(2026, 10, 5, 12);           // 11 月 5 日
+  assert.equal(store.summary(SEP, later).actualBalance, 7500);
+  assert.equal(store.summary(SEP, later).advanceReservedTotal, 0, '扣款后不再预留');
+  assert.equal(store.summary(OCT, later).actualBalance, 15500, '10 月实际剩余随之减少');
+  assert.equal(store.summary(OCT, later).plannedBalance, 15500, '也不再重复预留');
+  assert.equal(store.summary(NOV, later).actualBalance, 23500, '三个月总收入 24000 − 一次 500');
+});
+
+test('预支：真的花了（9 月买了 10 月的车票）就当场扣实际剩余', () => {
   const store = createStore();
   store.setIncome(8000, MARCH);
-  const now = new Date(2026, 2, 10, 12);
-  store.addAdvance({
-    title: '5 月的机票',
-    amount: 1200,
-    date: day(2026, 4, 20),
-    targetYear: 2026,
-    targetMonth: 5
-  }, MARCH);
   store.ensureMonth(APRIL);
+  const now = new Date(2026, 2, 20, 12);
+  store.addAdvance({ title: '10 月的车票', amount: 700, date: day(2026, 3, 10) }, MARCH);
 
   const march = store.summary(MARCH, now);
-  assert.equal(march.actualBalance, 8000, '3 月没真付钱');
-  assert.equal(march.plannedBalance, 6800, '3 月先预留 1200');
+  assert.equal(march.actualBalance, 7300, '钱已经花掉 → 实际剩余减少');
+  assert.equal(march.plannedBalance, 7300);
+  assert.equal(march.advancePaidTotal, 700);
+  assert.equal(march.advanceReservedTotal, 0, '已经花掉的不用再预留');
 
   const april = store.summary(APRIL, now);
-  assert.equal(april.carryOver, 8000, '结转按实际剩余走，不受预留影响');
-  assert.equal(april.actualBalance, 16000, '4 月手里包含这 1200');
-  assert.equal(april.advanceReservedTotal, 1200, '4 月仍然要预留');
-  assert.equal(april.plannedBalance, 14800);
-  assert.equal(april.advanceIncomingTotal, 0, '还没付款，5 月先不转入');
-
-  // 付款日过去之后：3 月扣掉、4 月随之减少、5 月收到转入
-  const later = new Date(2026, 3, 25, 12);
-  assert.equal(store.summary(MARCH, later).actualBalance, 6800);
-  assert.equal(store.summary(APRIL, later).actualBalance, 14800, '钱确实少了');
-  store.ensureMonth({ year: 2026, month: 5 });
-  const may = store.summary({ year: 2026, month: 5 }, later);
-  assert.equal(may.advanceIncomingTotal, 1200, '5 月收到 3 月替它付掉的钱');
-  assert.equal(may.carryOver, 14800);
-  assert.equal(may.actualBalance, 8000 + 14800 + 1200);
+  assert.equal(april.actualBalance, 15300, '10 月里不会再多出这 700（银行卡里就是这么多）');
+  assert.equal(april.plannedBalance, 15300);
+  assert.equal(april.advanceReservedTotal, 0, '不会重复扣');
+  assert.equal(april.advanceIncomingTotal, 700, '只作为提示：上个月已经付过');
 });
 
 // ---------------------------------------------------------------- 备份提醒
@@ -1015,20 +1002,14 @@ test('排序：预算未完成在前（按计划金额降序），已完成在�
     '未完成的餐饮排最前，两个已完成按实际金额从大到小');
 });
 
-test('排序：预支未收回在前，已收回在后，同组按日期从新到旧', () => {
+test('排序：预支按日期从新到旧', () => {
   const store = createStore();
   store.setIncome(10000, MARCH);
-  const settledOld = store.addAdvance({ title: '已收回的旧账', amount: 200, date: day(2026, 3, 1) }, MARCH);
-  const openNew = store.addAdvance({ title: '未收回的新的', amount: 300, date: day(2026, 3, 20) }, MARCH);
-  const openOld = store.addAdvance({ title: '未收回的旧的', amount: 400, date: day(2026, 3, 5) }, MARCH);
-  const settledNew = store.addAdvance({ title: '已收回的新账', amount: 500, date: day(2026, 3, 25) }, MARCH);
+  store.addAdvance({ title: '3 月 1 日', amount: 200, date: day(2026, 3, 1) }, MARCH);
+  store.addAdvance({ title: '3 月 20 日', amount: 300, date: day(2026, 3, 20) }, MARCH);
+  store.addAdvance({ title: '3 月 5 日', amount: 400, date: day(2026, 3, 5) }, MARCH);
 
-  store.repayAdvance(settledOld.id, 200, MARCH);
-  store.repayAdvance(settledNew.id, 500, MARCH);
-
-  assert.deepEqual(store.advances(MARCH).map(a => a.title),
-    ['未收回的新的', '未收回的旧的', '已收回的新账', '已收回的旧账']);
-  void openNew; void openOld; void settledNew;
+  assert.deepEqual(store.advances(MARCH).map(a => a.title), ['3 月 20 日', '3 月 5 日', '3 月 1 日']);
 });
 
 test('排序：记账按日期从新到旧', () => {
