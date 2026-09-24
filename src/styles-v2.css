@@ -1,71 +1,73 @@
 :root {
   color-scheme: light dark;
-  --bg: #f3f2f5;
+  --bg: #f4f7fb;
   --surface: #ffffff;
-  --surface-subtle: #f8f7f9;
-  --surface-pressed: #ebe9ed;
-  --text: #222126;
-  --muted: #68656e;
-  --faint: #918d97;
-  --line: rgba(50, 46, 56, 0.14);
-  --line-strong: rgba(50, 46, 56, 0.27);
-  --accent: #d6533f;
-  --accent-strong: #b64030;
-  --accent-soft: #fae9e5;
-  --action: #b83f2e;
+  --surface-subtle: #f7f9fc;
+  --surface-pressed: #e8eef7;
+  --text: #12213a;
+  --muted: #5c6b80;
+  --faint: #7d8a9d;
+  --line: rgba(29, 59, 101, 0.14);
+  --line-strong: rgba(29, 59, 101, 0.27);
+  --accent: #2563eb;
+  --accent-strong: #1d4ed8;
+  --accent-soft: #eaf1ff;
+  --action: #1e4ed8;
   --action-text: #ffffff;
-  --action-soft: #fae9e5;
-  --hero: #242329;
-  --hero-text: #faf9fb;
-  --hero-muted: #bdb9c3;
-  --good: #287a60;
-  --good-soft: #e7f4ee;
-  --bad: #c34652;
-  --bad-soft: #fae9ec;
-  --warn: #93611b;
-  --warn-soft: #f8f0e2;
-  --glass: rgba(248, 247, 250, 0.8);
+  --action-soft: #eaf1ff;
+  --hero: #102a43;
+  --hero-text: #f7faff;
+  --hero-muted: #b9c8dc;
+  --hero-good: #79dfb2;
+  --good: #047857;
+  --good-soft: #e7f6ef;
+  --bad: #c2414f;
+  --bad-soft: #fbeaec;
+  --warn: #8a5b13;
+  --warn-soft: #fbf1df;
+  --glass: rgba(244, 247, 251, 0.8);
   --glass-strong: rgba(255, 255, 255, 0.9);
   --glass-line: rgba(255, 255, 255, 0.74);
-  --shadow: 0 12px 34px rgba(37, 31, 43, 0.12);
-  --shadow-soft: 0 4px 16px rgba(37, 31, 43, 0.07);
-  --focus: rgba(214, 83, 63, 0.28);
+  --shadow: 0 14px 38px rgba(25, 52, 88, 0.14);
+  --shadow-soft: 0 4px 16px rgba(25, 52, 88, 0.08);
+  --focus: rgba(37, 99, 235, 0.3);
   --radius: 8px;
   --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #151417;
-    --surface: #201f23;
-    --surface-subtle: #29272c;
-    --surface-pressed: #333137;
-    --text: #f3f1f4;
-    --muted: #b8b4bd;
-    --faint: #938f98;
-    --line: rgba(242, 238, 245, 0.14);
-    --line-strong: rgba(242, 238, 245, 0.27);
-    --accent: #f0715c;
-    --accent-strong: #ff846f;
-    --accent-soft: #422923;
-    --action: #f0715c;
-    --action-text: #241512;
-    --action-soft: #422923;
-    --hero: #2a282e;
-    --hero-text: #faf8fb;
-    --hero-muted: #c7c2cb;
-    --good: #71b99a;
-    --good-soft: #21392f;
-    --bad: #f08d96;
-    --bad-soft: #44272d;
-    --warn: #d9ad6d;
+    --bg: #0d1422;
+    --surface: #151f30;
+    --surface-subtle: #1b2940;
+    --surface-pressed: #233451;
+    --text: #f0f5ff;
+    --muted: #aab8cc;
+    --faint: #8291a8;
+    --line: rgba(218, 230, 249, 0.14);
+    --line-strong: rgba(218, 230, 249, 0.27);
+    --accent: #7ca3ff;
+    --accent-strong: #a8c0ff;
+    --accent-soft: #1d3157;
+    --action: #3f6fe5;
+    --action-text: #ffffff;
+    --action-soft: #1d3157;
+    --hero: #142e50;
+    --hero-text: #f7faff;
+    --hero-muted: #bdcbe0;
+    --hero-good: #78deb1;
+    --good: #61c99c;
+    --good-soft: #173a32;
+    --bad: #f08b96;
+    --bad-soft: #44272f;
+    --warn: #e0b56f;
     --warn-soft: #3d3121;
-    --glass: rgba(32, 31, 35, 0.82);
-    --glass-strong: rgba(34, 33, 37, 0.93);
+    --glass: rgba(21, 31, 48, 0.82);
+    --glass-strong: rgba(21, 31, 48, 0.93);
     --glass-line: rgba(255, 255, 255, 0.12);
     --shadow: 0 12px 36px rgba(0, 0, 0, 0.34);
     --shadow-soft: 0 3px 16px rgba(0, 0, 0, 0.24);
-    --focus: rgba(240, 113, 92, 0.34);
+    --focus: rgba(124, 163, 255, 0.36);
   }
 }
 
@@ -359,6 +361,8 @@ main { width: min(100%, 880px); margin-inline: auto; padding: 0 16px 32px; }
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
 }
+
+.hero-sub span:first-child strong { color: var(--hero-good); }
 
 .tiles {
   display: grid;
@@ -1001,6 +1005,64 @@ main { width: min(100%, 880px); margin-inline: auto; padding: 0 16px 32px; }
   .tabs,
   .sheet { background: var(--surface); -webkit-backdrop-filter: none; backdrop-filter: none; }
   .fab { color: var(--action-text); background: var(--action); -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  main.data-refresh .hero-value {
+    animation: value-enter 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  main.data-refresh .hero-sub span,
+  main.data-refresh .tile,
+  main.data-refresh .summary-grid .card,
+  main.data-refresh #listArea .section-title,
+  main.data-refresh #listArea .day-header,
+  main.data-refresh #listArea .list,
+  main.data-refresh #listArea .empty {
+    animation: content-enter 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  main.data-refresh .hero-sub span:nth-child(2),
+  main.data-refresh .tile:nth-child(2) { animation-delay: 35ms; }
+  main.data-refresh .hero-sub span:nth-child(3),
+  main.data-refresh .tile:nth-child(3) { animation-delay: 60ms; }
+  main.data-refresh .hero-sub span:nth-child(4),
+  main.data-refresh .tile:nth-child(4) { animation-delay: 85ms; }
+  main.data-refresh .tile:nth-child(n + 5) { animation-delay: 105ms; }
+  main.data-refresh .summary-grid .card { animation-delay: 120ms; }
+  main.data-refresh .summary-grid .card:nth-child(2) { animation-delay: 145ms; }
+  main.data-refresh #listArea .section-title,
+  main.data-refresh #listArea .day-header,
+  main.data-refresh #listArea .list { animation-delay: 110ms; }
+
+  .tab.active { animation: tab-settle 220ms cubic-bezier(0.22, 1, 0.36, 1); }
+  .backdrop:not(.hidden) { animation: backdrop-enter 180ms ease-out both; }
+  .toast:not(.hidden) { animation: toast-enter 220ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+  @keyframes value-enter {
+    from { opacity: 0; transform: translateY(8px) scale(0.985); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  @keyframes content-enter {
+    from { opacity: 0; transform: translateY(7px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes tab-settle {
+    from { transform: scale(0.97); }
+    to { transform: scale(1); }
+  }
+
+  @keyframes backdrop-enter {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes toast-enter {
+    from { opacity: 0; transform: translate(-50%, 8px); }
+    to { opacity: 1; transform: translate(-50%, 0); }
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
