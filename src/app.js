@@ -464,7 +464,7 @@
     const summary = store.summary(currentKey);
     const hero = $('hero');
     hero.classList.toggle('negative', summary.isBalanceNegative);
-    $('heroLabel').textContent = Month.label(currentKey) + ' 结余（已扣预算）';
+    $('heroLabel').textContent = Month.label(currentKey) + ' 可用结余';
     $('heroValue').textContent = Money.format(summary.plannedBalance);
     $('heroSub').innerHTML =
       '<span>收入 <strong>' + Money.format(summary.income) + '</strong></span>' +
@@ -499,6 +499,15 @@
     const tiles = [];
 
     tiles.push(tile(
+      '实际剩余',
+      Money.format(s.actualBalance),
+      s.advanceReservedTotal > 0
+        ? '只扣已经花掉的：未花预算 ' + Money.format(s.unspentBudget) + ' + 预支待预留 ' + Money.format(s.advanceReservedTotal)
+        : '只扣已经花掉的，含未花预算 ' + Money.format(s.unspentBudget),
+      s.isCashNegative ? 'actual bad' : 'actual',
+      '对账'
+    ));
+    tiles.push(tile(
       '预算计划',
       Money.format(s.plannedTotal),
       s.itemCount === 0 ? '还没有预算项目' : ('已完成 ' + s.completedItemCount + ' / ' + s.itemCount + ' 项'),
@@ -509,15 +518,6 @@
       Money.format(s.paidTotal),
       '还需预留 ' + Money.format(s.remainingBudget),
       s.isOverBudget ? 'bad' : ''
-    ));
-    tiles.push(tile(
-      '实际剩余',
-      Money.format(s.actualBalance),
-      s.advanceReservedTotal > 0
-        ? '只扣已经花掉的：未花预算 ' + Money.format(s.unspentBudget) + ' + 预支待预留 ' + Money.format(s.advanceReservedTotal)
-        : '只扣已经花掉的，含未花预算 ' + Money.format(s.unspentBudget),
-      s.isCashNegative ? 'bad' : '',
-      '对账'
     ));
     if (s.reconciliationAdjustment !== 0) {
       tiles.push(tile(

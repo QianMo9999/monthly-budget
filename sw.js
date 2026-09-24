@@ -3,10 +3,10 @@
  * 只在安全上下文（HTTPS 或 localhost）里生效，这正是托管到 GitHub Pages 的原因。
  */
 // 改动 App 文件后把版本号和 core.js 里的 VERSION 一起 +1，旧缓存就会自动清理
-const CACHE_NAME = 'monthly-budget-v1.9.0';
+const CACHE_NAME = 'monthly-budget-v2.0.0';
 const APP_SHELL = [
   './manifest.webmanifest',
-  './src/styles.css',
+  './src/styles-v2.css',
   './src/core.js',
   './src/app.js',
   './icons/icon-192.png',

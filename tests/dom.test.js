@@ -11,7 +11,8 @@ const path = require('node:path');
 const ROOT = path.join(__dirname, '..');
 const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
 const app = fs.readFileSync(path.join(ROOT, 'src/app.js'), 'utf8');
-const css = fs.readFileSync(path.join(ROOT, 'src/styles.css'), 'utf8');
+const stylesheet = html.match(/<link[^>]+rel="stylesheet"[^>]+href="([^"]+)"/);
+const css = stylesheet ? fs.readFileSync(path.join(ROOT, stylesheet[1]), 'utf8') : '';
 
 function matchAll(text, regex, group) {
   const result = [];
@@ -45,7 +46,7 @@ test('关键结构存在：底栏按钮、弹层、列表容器', () => {
 
 test('样式里定义了基础布局类', () => {
   ['hero', 'tile', 'row', 'chip', 'sheet', 'fab', 'toast', 'tab']
-    .forEach(className => assert.ok(css.includes('.' + className), 'styles.css 缺少 .' + className));
+    .forEach(className => assert.ok(css.includes('.' + className), '当前样式表缺少 .' + className));
 });
 
 test('app.js 只通过全局 BudgetCore 使用核心逻辑', () => {

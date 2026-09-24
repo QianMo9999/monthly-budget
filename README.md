@@ -184,7 +184,7 @@ budget-web/
 ├── src/
 │   ├── core.js                金额、账期、结余计算、数据读写（浏览器 + Node 通用）
 │   ├── app.js                 界面渲染与交互
-│   └── styles.css             样式（移动端优先，自动适配深色模式）
+│   └── styles-v2.css          样式（移动端优先，自动适配深色模式）
 ├── tests/
 │   ├── core.test.js           核心逻辑测试
 │   └── dom.test.js            界面接线检查（元素 id、静态资源）
