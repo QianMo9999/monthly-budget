@@ -532,9 +532,9 @@ main { width: min(100%, 880px); margin-inline: auto; padding: 0 16px 32px; }
 .tab-indicator {
   position: absolute;
   z-index: 2;
-  left: calc(16.666% - 14px);
+  left: calc(16.666% - 20px);
   bottom: -1px;
-  width: 28px;
+  width: 40px;
   height: 3px;
   border-radius: 2px;
   background: var(--action);

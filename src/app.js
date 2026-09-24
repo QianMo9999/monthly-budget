@@ -695,7 +695,7 @@ defineMorphIcon();
     window.requestAnimationFrame(function () {
       const targetLabel = target.querySelector('.tab-label');
       const labelWidth = targetLabel ? targetLabel.offsetWidth : 28;
-      const targetWidth = Math.max(26, Math.min(34, labelWidth));
+      const targetWidth = Math.max(40, Math.min(48, labelWidth + 12));
       const targetLeft = target.offsetLeft + (target.offsetWidth - targetWidth) / 2;
       const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       const currentStyle = window.getComputedStyle(indicator);
@@ -732,13 +732,13 @@ defineMorphIcon();
 
       tabIndicatorAnimation = indicator.animate([
         { left: fromLeft + 'px', width: fromWidth + 'px', offset: 0 },
-        { left: delayedLeft + 'px', width: delayedWidth + 'px', offset: 0.22 },
+        { left: delayedLeft + 'px', width: delayedWidth + 'px', offset: 0.16 },
         { left: midwayLeft + 'px', width: midwayWidth + 'px', offset: 0.52 },
         { left: (targetLeft + (movingRight ? 2 : -2)) + 'px', width: Math.max(1, targetWidth - 2) + 'px', offset: 0.82 },
         { left: (targetLeft + (movingRight ? -1 : 1)) + 'px', width: (targetWidth + 1) + 'px', offset: 0.92 },
         { left: targetLeft + 'px', width: targetWidth + 'px', offset: 1 }
       ], {
-        duration: 470,
+        duration: 620,
         easing: 'cubic-bezier(.2,.9,.22,1)',
         fill: 'forwards'
       });
