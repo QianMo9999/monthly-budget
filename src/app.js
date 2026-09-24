@@ -14,6 +14,7 @@ defineMorphIcon();
   const { Money, Month, Categories, categoryLabel } = core;
 
   const STORAGE_KEY = 'monthly-budget-state-v1';
+  const THEME_KEY = 'monthly-budget-theme';
   const $ = function (id) { return document.getElementById(id); };
 
   // ---------------------------------------------------------------- 持久化
@@ -31,6 +32,32 @@ defineMorphIcon();
   }
 
   storageAvailable = detectStorage();
+
+  function applyTheme(theme, persist) {
+    const nextTheme = theme === 'dark' ? 'dark' : 'light';
+    document.documentElement.dataset.theme = nextTheme;
+    const dark = nextTheme === 'dark';
+    const toggle = $('themeToggle');
+    if (toggle) {
+      const label = dark ? '切换为浅色模式' : '切换为深色模式';
+      toggle.setAttribute('aria-label', label);
+      toggle.setAttribute('title', label);
+      toggle.setAttribute('aria-pressed', dark ? 'true' : 'false');
+    }
+    const themeMeta = document.querySelector('meta[name="theme-color"]');
+    if (themeMeta) themeMeta.content = dark ? '#111315' : '#eef1f4';
+    const statusBarMeta = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
+    if (statusBarMeta) statusBarMeta.content = dark ? 'black-translucent' : 'default';
+    if (persist && storageAvailable) {
+      try {
+        window.localStorage.setItem(THEME_KEY, nextTheme);
+      } catch (error) {
+        storageAvailable = false;
+        renderStorageBanner();
+      }
+    }
+    scheduleFabGlassUpdate();
+  }
 
   function readInitialState() {
     if (!storageAvailable) return null;
@@ -1905,6 +1932,9 @@ defineMorphIcon();
   });
 
   $('monthLabel').addEventListener('click', openMonthPicker);
+  $('themeToggle').addEventListener('click', function () {
+    applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark', true);
+  });
   $('openSettings').addEventListener('click', openSettingsSheet);
   $('backdrop').addEventListener('click', closeSheet);
   document.addEventListener('keydown', function (event) {
@@ -2360,6 +2390,7 @@ defineMorphIcon();
     }
   });
 
+  applyTheme(document.documentElement.dataset.theme, false);
   render();
 
   // ---------------------------------------------------------------- 自检（?selftest=1）
@@ -2401,6 +2432,11 @@ defineMorphIcon();
     try {
       results.push('INFO  视口 ' + window.innerWidth + 'x' + window.innerHeight + ' dpr=' + window.devicePixelRatio);
       results.push('INFO  本地存储 ' + (storageAvailable ? '可用' : '不可用'));
+      click('themeToggle');
+      check('可以切换到深色模式', document.documentElement.dataset.theme === 'dark');
+      check('主题按钮会同步无障碍状态', $('themeToggle').getAttribute('aria-pressed') === 'true');
+      click('themeToggle');
+      check('可以切回浅色模式', document.documentElement.dataset.theme === 'light');
       store.reset();
       currentKey = { year: 2026, month: 3 };
       activeTab = 'budget';
