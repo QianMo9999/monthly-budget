@@ -693,10 +693,8 @@ defineMorphIcon();
     if (!indicator || !target) return;
 
     window.requestAnimationFrame(function () {
-      const targetLabel = target.querySelector('.tab-label');
-      const labelWidth = targetLabel ? targetLabel.offsetWidth : 28;
-      const targetWidth = Math.max(40, Math.min(48, labelWidth + 12));
-      const targetLeft = target.offsetLeft + (target.offsetWidth - targetWidth) / 2;
+      const targetWidth = target.offsetWidth;
+      const targetLeft = target.offsetLeft;
       const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       const currentStyle = window.getComputedStyle(indicator);
       const fromLeft = Number.parseFloat(currentStyle.left) || targetLeft;

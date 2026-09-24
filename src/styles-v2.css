@@ -532,9 +532,9 @@ main { width: min(100%, 880px); margin-inline: auto; padding: 0 16px 32px; }
 .tab-indicator {
   position: absolute;
   z-index: 2;
-  left: calc(16.666% - 20px);
+  left: 0;
   bottom: -1px;
-  width: 40px;
+  width: 33.333333%;
   height: 3px;
   border-radius: 2px;
   background: var(--action);
@@ -663,11 +663,11 @@ main { width: min(100%, 880px); margin-inline: auto; padding: 0 16px 32px; }
 .empty button { margin-top: 14px; }
 
 .fab {
-  --fab-glass: rgba(241, 247, 255, 0.58);
-  --fab-glass-inner: rgba(255, 255, 255, 0.12);
+  --fab-glass: rgba(241, 248, 255, 0.1);
+  --fab-glass-inner: rgba(255, 255, 255, 0.035);
   --fab-ink: #163354;
-  --fab-edge: rgba(255, 255, 255, 0.9);
-  --fab-edge-soft: rgba(78, 145, 234, 0.42);
+  --fab-edge: rgba(255, 255, 255, 0.82);
+  --fab-edge-soft: rgba(75, 151, 242, 0.64);
   --glass-edge-angle: 0deg;
   --glass-refract-x: 0px;
   --glass-refract-y: 0px;
@@ -680,30 +680,30 @@ main { width: min(100%, 880px); margin-inline: auto; padding: 0 16px 32px; }
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  isolation: isolate;
   overflow: hidden;
   border: 1px solid var(--fab-edge);
   border-radius: var(--radius);
   color: var(--fab-ink);
-  background: var(--fab-glass);
+  background-color: var(--fab-glass);
+  background-clip: padding-box;
   box-shadow:
-    0 12px 30px rgba(20, 62, 110, 0.2),
-    inset 0 1px 0 rgba(255, 255, 255, 0.72),
-    inset 0 -1px 0 rgba(43, 101, 171, 0.16);
+    0 10px 26px rgba(20, 62, 110, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.76),
+    inset 0 -1px 0 rgba(43, 101, 171, 0.13);
   font-size: 14px;
   font-weight: 700;
 }
 
 .fab[data-glass-tone="dark"] {
-  --fab-glass: rgba(12, 20, 32, 0.46);
-  --fab-glass-inner: rgba(255, 255, 255, 0.08);
+  --fab-glass: rgba(244, 249, 255, 0.12);
+  --fab-glass-inner: rgba(255, 255, 255, 0.04);
   --fab-ink: #ffffff;
-  --fab-edge: rgba(255, 255, 255, 0.54);
-  --fab-edge-soft: rgba(125, 196, 255, 0.72);
+  --fab-edge: rgba(255, 255, 255, 0.62);
+  --fab-edge-soft: rgba(131, 206, 255, 0.82);
   box-shadow:
-    0 13px 32px rgba(0, 0, 0, 0.3),
-    inset 0 1px 0 rgba(255, 255, 255, 0.46),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.22);
+    0 11px 28px rgba(3, 15, 31, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.56),
+    inset 0 -1px 0 rgba(4, 24, 48, 0.12);
 }
 
 .fab::before,
@@ -726,10 +726,11 @@ main { width: min(100%, 880px); margin-inline: auto; padding: 0 16px 32px; }
 
 .fab::after {
   z-index: 1;
-  inset: 4px;
-  background: var(--fab-glass-inner);
-  box-shadow: inset 2px 2px 5px rgba(255, 255, 255, 0.2), inset -2px -2px 6px rgba(19, 63, 112, 0.1);
-  transform: translate(var(--glass-refract-x), var(--glass-refract-y)) scale(1.04);
+  inset: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background-color: var(--fab-glass-inner);
+  box-shadow: inset 2px 2px 5px rgba(255, 255, 255, 0.14), inset -2px -2px 6px rgba(19, 63, 112, 0.07);
+  transform: translate(var(--glass-refract-x), var(--glass-refract-y)) scale(1.03);
 }
 
 .fab svg,
@@ -748,6 +749,7 @@ main { width: min(100%, 880px); margin-inline: auto; padding: 0 16px 32px; }
 .backdrop:not(.hidden) { opacity: 1; pointer-events: auto; }
 
 .sheet {
+  --sheet-fill: var(--surface);
   position: fixed;
   z-index: 50;
   inset: auto 0 0;
@@ -762,8 +764,11 @@ main { width: min(100%, 880px); margin-inline: auto; padding: 0 16px 32px; }
   border: 1px solid var(--line);
   border-bottom: 0;
   border-radius: 22px 22px 0 0;
-  background: var(--surface);
-  box-shadow: 0 -18px 52px rgba(0, 0, 0, 0.18);
+  background: var(--sheet-fill);
+  box-shadow:
+    0 48px 0 var(--sheet-fill),
+    0 96px 0 var(--sheet-fill),
+    0 -18px 52px rgba(0, 0, 0, 0.18);
 }
 
 .sheet-grabber { width: 100%; min-height: 44px; margin: 0; flex: 0 0 44px; background: transparent; cursor: grab; touch-action: none; }
@@ -1088,17 +1093,13 @@ main { width: min(100%, 880px); margin-inline: auto; padding: 0 16px 32px; }
   }
 
   .fab {
-    -webkit-backdrop-filter: blur(18px) saturate(165%) contrast(1.06);
-    backdrop-filter: blur(18px) saturate(165%) contrast(1.06);
-  }
-
-  .fab::after {
-    -webkit-backdrop-filter: blur(5px) saturate(180%) contrast(1.08);
-    backdrop-filter: blur(5px) saturate(180%) contrast(1.08);
+    -webkit-backdrop-filter: blur(2px) saturate(180%) brightness(1.06) contrast(1.04);
+    backdrop-filter: blur(2px) saturate(180%) brightness(1.06) contrast(1.04);
   }
 
   .sheet {
-    background: var(--glass-strong);
+    --sheet-fill: var(--glass-strong);
+    background: var(--sheet-fill);
     border-color: var(--glass-line);
     -webkit-backdrop-filter: blur(34px) saturate(145%);
     backdrop-filter: blur(34px) saturate(145%);
