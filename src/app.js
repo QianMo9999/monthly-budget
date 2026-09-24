@@ -66,6 +66,7 @@ defineMorphIcon();
   let sheetPresentation = null;
   let renderedActiveTab = null;
   let tabIndicatorAnimation = null;
+  let fabGlassFrame = 0;
 
   const urlParams = new URLSearchParams(window.location.search);
   if (['budget', 'ledger', 'advance'].indexOf(urlParams.get('tab')) >= 0) {
@@ -381,6 +382,65 @@ defineMorphIcon();
     renderList();
     renderStorageBanner();
     renderBackupBanner();
+    scheduleFabGlassUpdate();
+  }
+
+  function parseCssColor(value) {
+    if (!value || value === 'transparent') return null;
+    const channels = value.match(/[\d.]+/g);
+    if (!channels || channels.length < 3) return null;
+    return {
+      r: Number(channels[0]),
+      g: Number(channels[1]),
+      b: Number(channels[2]),
+      a: channels.length > 3 ? Number(channels[3]) : 1
+    };
+  }
+
+  function relativeLuminance(color) {
+    const linear = function (channel) {
+      const normalized = channel / 255;
+      return normalized <= 0.04045
+        ? normalized / 12.92
+        : Math.pow((normalized + 0.055) / 1.055, 2.4);
+    };
+    return 0.2126 * linear(color.r) + 0.7152 * linear(color.g) + 0.0722 * linear(color.b);
+  }
+
+  function backgroundUnderFab(fab) {
+    const rect = fab.getBoundingClientRect();
+    const x = Math.min(window.innerWidth - 1, Math.max(0, rect.left + rect.width / 2));
+    const y = Math.min(window.innerHeight - 1, Math.max(0, rect.top + rect.height / 2));
+    const elements = document.elementsFromPoint ? document.elementsFromPoint(x, y) : [];
+
+    for (let i = 0; i < elements.length; i += 1) {
+      let node = elements[i];
+      if (node === fab || fab.contains(node)) continue;
+      while (node && node !== document.documentElement) {
+        const color = parseCssColor(window.getComputedStyle(node).backgroundColor);
+        if (color && color.a >= 0.16) return color;
+        node = node.parentElement;
+      }
+    }
+    return parseCssColor(window.getComputedStyle(document.body).backgroundColor) || { r: 242, g: 246, b: 251, a: 1 };
+  }
+
+  function updateFabGlass() {
+    fabGlassFrame = 0;
+    const fab = $('fab');
+    if (!fab || !fab.isConnected) return;
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const scrollY = window.scrollY || window.pageYOffset || 0;
+    const color = backgroundUnderFab(fab);
+    fab.setAttribute('data-glass-tone', relativeLuminance(color) < 0.34 ? 'dark' : 'light');
+    fab.style.setProperty('--glass-edge-angle', reduceMotion ? '0deg' : ((scrollY * 0.24) % 360) + 'deg');
+    fab.style.setProperty('--glass-refract-x', reduceMotion ? '0px' : (Math.sin(scrollY * 0.014) * 2.2).toFixed(2) + 'px');
+    fab.style.setProperty('--glass-refract-y', reduceMotion ? '0px' : (Math.cos(scrollY * 0.011) * 1.6).toFixed(2) + 'px');
+  }
+
+  function scheduleFabGlassUpdate() {
+    if (fabGlassFrame) return;
+    fabGlassFrame = window.requestAnimationFrame(updateFabGlass);
   }
 
   /** 余额明细：把「实际剩余」和「结余」怎么算出来的一行行列清楚，避免数字对不上时说不清 */
@@ -1819,6 +1879,12 @@ defineMorphIcon();
     const button = event.target.closest('button');
     if (button && button.classList.contains('keyboard-pressed')) releaseButton(button);
   });
+
+  window.addEventListener('scroll', scheduleFabGlassUpdate, { passive: true });
+  window.addEventListener('resize', scheduleFabGlassUpdate, { passive: true });
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', scheduleFabGlassUpdate, { passive: true });
+  }
 
   // ---------------------------------------------------------------- 事件
 
