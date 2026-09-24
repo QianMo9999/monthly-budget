@@ -64,6 +64,7 @@ defineMorphIcon();
   let sheetReturnFocus = null;
   let sheetEngine = null;
   let sheetPresentation = null;
+  let breakdownContentAnimation = null;
   let renderedActiveTab = null;
   let tabIndicatorAnimation = null;
   let fabGlassFrame = 0;
@@ -476,27 +477,81 @@ defineMorphIcon();
         '<div class="breakdown-head">' +
         '<div><div class="breakdown-title">余额明细</div>' +
         '<div class="breakdown-caption">看清每一笔钱怎么组成</div></div>' +
-        '<button class="breakdown-toggle" type="button" data-toggle-breakdown="1" aria-expanded="false">' +
-        '<span>查看明细</span>' +
+        '<div class="breakdown-actions">' +
+        '<button class="breakdown-tool" type="button" data-reconcile="1">' +
+        iconSvg('scale') + '<span>对账</span></button>' +
+        '<button class="breakdown-tool breakdown-toggle" type="button" data-toggle-breakdown="1" aria-expanded="false">' +
+        '<span>明细</span>' +
         '<morph-icon class="breakdown-morph" icon="M5.5 7.5 10 12l4.5-4.5" size="16" stroke-width="1.8" reduced-motion="user"></morph-icon>' +
-        '</button></div><div class="breakdown-content"></div>';
+        '</button></div></div><div class="breakdown-content"></div>';
     }
 
     const toggle = card.querySelector('.breakdown-toggle');
     const morph = card.querySelector('.breakdown-morph');
     toggle.setAttribute('aria-expanded', breakdownExpanded ? 'true' : 'false');
-    toggle.querySelector('span').textContent = breakdownExpanded ? '收起' : '查看明细';
+    toggle.querySelector('span').textContent = breakdownExpanded ? '收起' : '明细';
     const morphPath = breakdownExpanded
       ? 'M5.5 12.5 10 8l4.5 4.5'
       : 'M5.5 7.5 10 12l4.5-4.5';
     if (morph) morph.icon = morphPath;
-    card.querySelector('.breakdown-content').innerHTML = breakdownExpanded
+    const content = card.querySelector('.breakdown-content');
+    const nextMode = breakdownExpanded ? 'expanded' : 'collapsed';
+    const nextHTML = breakdownExpanded
       ? '<div class="breakdown-body">' + rows.join('') + '</div>'
       : '<div class="breakdown-summary">' +
         '<div><span>实际剩余</span><strong>' + Money.format(s.actualBalance) + '</strong></div>' +
         '<i></i>' +
         '<div><span>可用结余</span><strong>' + Money.format(s.plannedBalance) + '</strong></div>' +
         '</div>';
+
+    const previousMode = content.dataset.mode;
+    const shouldAnimate = typeof content.animate === 'function' &&
+      previousMode && previousMode !== nextMode &&
+      !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (!shouldAnimate) {
+      if (breakdownContentAnimation) breakdownContentAnimation.cancel();
+      breakdownContentAnimation = null;
+      content.classList.remove('is-animating');
+      content.style.height = '';
+      content.innerHTML = nextHTML;
+      content.dataset.mode = nextMode;
+      return;
+    }
+
+    const fromHeight = content.getBoundingClientRect().height;
+    if (breakdownContentAnimation) breakdownContentAnimation.cancel();
+    content.style.height = 'auto';
+    content.innerHTML = nextHTML;
+    content.dataset.mode = nextMode;
+    const toHeight = content.getBoundingClientRect().height;
+    content.style.height = fromHeight + 'px';
+    content.classList.add('is-animating');
+    void content.offsetHeight;
+
+    const animation = content.animate([
+      { height: fromHeight + 'px' },
+      { height: toHeight + 'px' }
+    ], {
+      duration: 380,
+      easing: 'cubic-bezier(.2,.9,.22,1)'
+    });
+    breakdownContentAnimation = animation;
+    const child = content.firstElementChild;
+    if (child) {
+      child.animate([
+        { opacity: 0.35, transform: 'translateY(-4px)' },
+        { opacity: 1, transform: 'translateY(0)' }
+      ], {
+        duration: 300,
+        easing: 'cubic-bezier(.2,.9,.22,1)'
+      });
+    }
+    animation.addEventListener('finish', function () {
+      if (breakdownContentAnimation !== animation) return;
+      breakdownContentAnimation = null;
+      content.classList.remove('is-animating');
+      content.style.height = '';
+    }, { once: true });
   }
 
   /** 备份提醒：手机上的浏览器存储有可能被系统清掉，定期导出一次最保险。 */
@@ -1903,6 +1958,11 @@ defineMorphIcon();
   });
 
   $('hero').addEventListener('click', openIncomeSheet);
+  $('hero').addEventListener('keydown', function (event) {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    openIncomeSheet();
+  });
 
   // 概览卡片里的「对账」按钮
   $('statTiles').addEventListener('click', function (event) {
@@ -1913,6 +1973,10 @@ defineMorphIcon();
   $('backupNow').addEventListener('click', backupNow);
 
   $('breakdownCard').addEventListener('click', function (event) {
+    if (event.target.closest('[data-reconcile]')) {
+      openReconcileSheet();
+      return;
+    }
     if (!event.target.closest('[data-toggle-breakdown]')) return;
     breakdownExpanded = !breakdownExpanded;
     renderBreakdown();
@@ -2720,8 +2784,8 @@ defineMorphIcon();
       const targetBalance = Money.round(beforeReconcile.bookBalance - 250);
 
       click('tab-budget');
-      check('概览「实际剩余」卡片有对账按钮', !!$('statTiles').querySelector('[data-reconcile]'));
-      $('statTiles').querySelector('[data-reconcile]').click();
+      check('余额明细有对账按钮', !!$('breakdownCard').querySelector('[data-reconcile]'));
+      $('breakdownCard').querySelector('[data-reconcile]').click();
       check('打开对账面板', !!$('reconcile-amount'));
       check('面板显示账面剩余', $('sheet').textContent.includes(Money.format(beforeReconcile.bookBalance)));
       $('reconcile-amount').value = String(targetBalance);
@@ -2744,7 +2808,7 @@ defineMorphIcon();
         Money.plain(afterReconcile.plannedBalance) + ' + ' + Money.plain(afterReconcile.unspentBudget) +
         ' + ' + Money.plain(afterReconcile.advanceReservedTotal) + ' vs ' + Money.plain(afterReconcile.actualBalance));
 
-      $('statTiles').querySelector('[data-reconcile]').click();
+      $('breakdownCard').querySelector('[data-reconcile]').click();
       const secondRecord = store.reconcile(targetBalance, currentKey, '再对一次');
       check('重复对账不会叠加', Money.cents(store.summary(currentKey).actualBalance) === Money.cents(targetBalance),
         '第二次差额 ' + Money.plain(secondRecord.difference) + '，余额仍为 ' + Money.plain(store.summary(currentKey).actualBalance));
