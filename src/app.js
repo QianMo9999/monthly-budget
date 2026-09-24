@@ -55,6 +55,7 @@
   let currentKey = Month.current();
   let activeTab = 'budget';
   let sheetState = null;
+  let breakdownExpanded = true;
 
   const urlParams = new URLSearchParams(window.location.search);
   if (['budget', 'ledger', 'advance'].indexOf(urlParams.get('tab')) >= 0) {
@@ -323,10 +324,53 @@
     renderHero();
     renderTiles();
     renderProgress();
+    renderBreakdown();
     renderTabs();
     renderList();
     renderStorageBanner();
     renderBackupBanner();
+  }
+
+  /** 余额明细：把「实际剩余」和「结余」怎么算出来的一行行列清楚，避免数字对不上时说不清 */
+  function renderBreakdown() {
+    const card = $('breakdownCard');
+    if (!card) return;
+    const s = store.summary(currentKey);
+    const line = function (label, amount, note, tone) {
+      return '<div class="stat-line">' +
+        '<span class="k">' + esc(label) + (note ? ' <span class="muted-note">' + esc(note) + '</span>' : '') + '</span>' +
+        '<span class="v ' + (tone || '') + '">' + (amount >= 0 ? '+' : '−') + Money.format(Math.abs(amount)) + '</span>' +
+        '</div>';
+    };
+    const rows = [];
+    rows.push(line('本月收入', s.income));
+    rows.push(line('上月结转', s.carryOver,
+      s.advanceCarriedTotal > 0 ? '其中含为后面月份预留的 ' + Money.format(s.advanceCarriedTotal) : ''));
+    if (s.ledgerIncomeTotal > 0) rows.push(line('零星收入', s.ledgerIncomeTotal));
+    if (s.advanceIncomingTotal > 0) rows.push(line('上月已替你付的预支', s.advanceIncomingTotal, '本月记成已支付时会抵消'));
+    if (s.reconciliationAdjustment !== 0) rows.push(line('对账调整', s.reconciliationAdjustment));
+    rows.push(line('预算已支付', -s.paidTotal));
+    if (s.ledgerTotal > 0) rows.push(line('零星支出', -s.ledgerTotal));
+    if (s.advancePaidTotal > 0) rows.push(line('本月预支已花掉', -s.advancePaidTotal));
+    rows.push('<div class="stat-line total"><span class="k">实际剩余（卡里的钱）</span><span class="v">' +
+      Money.format(s.actualBalance) + '</span></div>');
+    if (s.advanceReservedTotal > 0) {
+      rows.push(line('减去预支待预留', -s.advanceReservedTotal, '留给后面月份，不算本月可花'));
+    }
+    rows.push(line('减去未花预算', -s.unspentBudget, '还没花掉但已经留出来的预算'));
+    rows.push('<div class="stat-line total"><span class="k">结余（能自由安排的钱）</span><span class="v">' +
+      Money.format(s.plannedBalance) + '</span></div>');
+
+    card.innerHTML =
+      '<div class="breakdown-head">' +
+      '<span>余额明细</span>' +
+      '<button class="mini-btn ghost" type="button" data-toggle-breakdown="1">' +
+      (breakdownExpanded ? '收起' : '展开') + '</button>' +
+      '</div>' +
+      (breakdownExpanded
+        ? '<div class="breakdown-body">' + rows.join('') + '</div>'
+        : '<div class="breakdown-hint">实际剩余 ' + Money.format(s.actualBalance) +
+          ' · 结余 ' + Money.format(s.plannedBalance) + '（点「展开」看怎么算的）</div>');
   }
 
   /** 备份提醒：手机上的浏览器存储有可能被系统清掉，定期导出一次最保险。 */
@@ -1218,6 +1262,20 @@
     const advance = advanceId ? store.advance(advanceId, currentKey) : null;
     const editing = !!advance;
     const target = advance ? core.advanceTargetKey(advance) : Month.next(currentKey);
+    // 新记录的扣款日默认落在归属月，而不是今天（否则会被当成"已经花了"）
+    const defaultDate = (function () {
+      const today = new Date();
+      const day = Math.min(today.getDate(), Month.dayCount(target));
+      return toDateInputValue(new Date(target.year, target.month - 1, day, 12).toISOString());
+    })();
+    const inputDate = advance ? toDateInputValue(advance.date) : defaultDate;
+    const explicit = advance ? advance.paidOverride : null;
+    const paidNow = explicit === null || explicit === undefined
+      ? fromDateInputValue(inputDate) <= new Date().toISOString()
+      : explicit;
+    const paidHint = (explicit === null || explicit === undefined ? '按扣款日自动判断：' : '') + (paidNow
+      ? '已经花了 → 从本月实际剩余里扣掉（记到归属月时可以抵消）。'
+      : '还没花 → 本月实际剩余不动（钱还在卡里），只从结余里减掉，留到归属那月再花。');
     const html =
       '<h2>' + (editing ? '编辑预支' : '新增预支') + '</h2>' +
       '<div class="hint" style="margin-bottom:12px">这个月买的、但属于下个月的开销（车票、学费、订阅…）：钱从本月出，' +
@@ -1228,10 +1286,15 @@
       '<div class="amount-input"><span class="prefix">¥</span>' +
       '<input id="advance-amount" type="text" inputmode="decimal" placeholder="0.00" value="' +
       (advance ? esc(Money.plain(advance.amount)) : '') + '"></div></div>' +
+      '<div class="field"><label>这笔钱花了没有</label>' +
+      '<div class="chips" data-paid-group>' +
+      '<button type="button" class="chip ' + (paidNow ? 'active' : '') + '" data-paid="yes">已经花了</button>' +
+      '<button type="button" class="chip ' + (!paidNow ? 'active' : '') + '" data-paid="no">还没花（先预留）</button>' +
+      '</div>' +
+      '<div class="hint" id="paid-hint">' + paidHint + '</div></div>' +
       '<div class="field"><label>扣款日</label>' +
-      '<input id="advance-date" type="date" value="' +
-      (advance ? toDateInputValue(advance.date) : todayISO()) + '">' +
-      '<div class="hint">这笔钱预计哪天从卡里扣（或已经花了）。</div></div>' +
+      '<input id="advance-date" type="date" value="' + esc(inputDate) + '">' +
+      '<div class="hint">钱预计哪天从卡里扣（已经花了的话就是花钱那天）。</div></div>' +
       '<div class="field"><label>这笔钱算在哪个月</label>' +
       '<div class="stepper">' +
       '<button type="button" class="icon-btn" data-target-step="-1">‹</button>' +
@@ -1253,7 +1316,8 @@
       kind: 'advance',
       advanceId: advanceId || null,
       targetYear: target.year,
-      targetMonth: target.month
+      targetMonth: target.month,
+      paidOverride: explicit === undefined ? null : explicit
     });
   }
 
@@ -1464,7 +1528,8 @@
       date: fromDateInputValue(valueOf('advance-date')),
       note: valueOf('advance-note'),
       targetYear: sheetState.targetYear,
-      targetMonth: sheetState.targetMonth
+      targetMonth: sheetState.targetMonth,
+      paidOverride: sheetState.paidOverride
     };
     if (sheetState && sheetState.advanceId) {
       store.updateAdvance(sheetState.advanceId, payload, currentKey);
@@ -1510,6 +1575,12 @@
   });
 
   $('backupNow').addEventListener('click', backupNow);
+
+  $('breakdownCard').addEventListener('click', function (event) {
+    if (!event.target.closest('[data-toggle-breakdown]')) return;
+    breakdownExpanded = !breakdownExpanded;
+    renderBreakdown();
+  });
 
   ['budget', 'ledger', 'advance'].forEach(function (tab) {
     $('tab-' + tab).addEventListener('click', function () {
@@ -1583,6 +1654,22 @@
       sheetState.targetMonth = target.month;
       const label = $('advance-target-label');
       if (label) label.textContent = Month.label(target);
+      return;
+    }
+
+    const paidChip = event.target.closest('[data-paid]');
+    if (paidChip) {
+      const group = paidChip.parentElement;
+      group.querySelectorAll('.chip').forEach(function (node) { node.classList.remove('active'); });
+      paidChip.classList.add('active');
+      const paid = paidChip.getAttribute('data-paid') === 'yes';
+      if (sheetState) sheetState.paidOverride = paid;
+      const hint = $('paid-hint');
+      if (hint) {
+        hint.textContent = paid
+          ? '已经花了 → 从本月实际剩余里扣掉（记到归属月时可以抵消）。'
+          : '还没花 → 本月实际剩余不动（钱还在卡里），只从结余里减掉，留到归属那月再花。';
+      }
       return;
     }
 
@@ -1829,6 +1916,24 @@
   });
 
   $('sheet').addEventListener('change', function (event) {
+    if (event.target && event.target.id === 'advance-date' && sheetState && sheetState.kind === 'advance') {
+      if (sheetState.paidOverride === null || sheetState.paidOverride === undefined) {
+        const paid = fromDateInputValue($('advance-date').value) <= new Date().toISOString();
+        const group = $('sheet').querySelector('[data-paid-group]');
+        if (group) {
+          group.querySelectorAll('.chip').forEach(function (node) {
+            node.classList.toggle('active', node.getAttribute('data-paid') === (paid ? 'yes' : 'no'));
+          });
+        }
+        const hint = $('paid-hint');
+        if (hint) {
+          hint.textContent = '按扣款日自动判断：' + (paid
+            ? '已经花了 → 从本月实际剩余里扣掉（记到归属月时可以抵消）。'
+            : '还没花 → 本月实际剩余不动（钱还在卡里），只从结余里减掉，留到归属那月再花。');
+        }
+      }
+      return;
+    }
     if (event.target && event.target.id === 'import-file') {
       const file = event.target.files && event.target.files[0];
       if (!file) return;
@@ -2026,6 +2131,8 @@
       $('advance-title').value = '下下个月的机票';
       $('advance-amount').value = '1200';
       $('advance-date').value = toDateInputValue(futureDate.toISOString());
+      check('预支可以明确选「还没花（先预留）」',
+        !!$('sheet').querySelector('[data-paid="no"]') && !!$('sheet').querySelector('[data-paid="yes"]'));
       const beforeFutureAdvance = store.summary(currentKey);
       $('sheet').querySelector('[data-action="save-advance"]').click();
       const afterFutureAdvance = store.summary(currentKey);

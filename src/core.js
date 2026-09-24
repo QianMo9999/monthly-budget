@@ -14,7 +14,7 @@
   'use strict';
 
   /** App 版本号：改了功能就 +1，设置里能看到，用来确认线上是否已更新 */
-  const VERSION = 'v1.6.2';
+  const VERSION = 'v1.7.1';
 
   // ---------------------------------------------------------------- 金额
   // 内部一律按“分”做整数运算，避免 0.1 + 0.2 这类浮点误差。
@@ -331,6 +331,13 @@
       /* 这笔钱属于哪个月（默认是下个月）：例如 9 月买 10 月的车票 */
       targetYear: typeof data.targetYear === 'number' ? data.targetYear : fallbackTarget.year,
       targetMonth: typeof data.targetMonth === 'number' ? data.targetMonth : fallbackTarget.month,
+      /*
+       * 钱到底花了没有：
+       *   null  = 按扣款日自动判断（到了就按已花掉算）
+       *   true  = 用户明确说「已经花了」
+       *   false = 用户明确说「还没花，先预留」
+       */
+      paidOverride: typeof data.paidOverride === 'boolean' ? data.paidOverride : null,
       createdAt: data.createdAt || now,
       updatedAt: data.updatedAt || now
     };
@@ -352,6 +359,7 @@
    * - 到了或已经过去 → 钱真的付出去了，实际剩余也要扣
    */
   function advanceIsPaid(advance, now) {
+    if (typeof advance.paidOverride === 'boolean') return advance.paidOverride;
     const when = new Date(advance.date);
     if (!Number.isFinite(when.getTime())) return true;
     const today = startOfDay(now || new Date()).getTime();
@@ -699,12 +707,19 @@
       .map(advanceOutstanding));
     /*
      * 还没到扣款日：像计划中的预算 —— 只占结余、不扣实际剩余。
-     * 从登记那个月开始，一直预留到扣款日为止：
-     * 例如 9 月给 11 月的开销预留 500，那么 10 月的实际剩余里仍然有这 500（钱还没花），
-     * 但 10 月的结余里必须减掉这 500（它是留给 11 月的，不能当成本月可花的钱）。
+     * 只对「目标月之前的月份」预留：
+     * 例如 9 月为 11 月的开销预留 500，那么
+     *   9 月、10 月：实际剩余里还有这 500（钱没花），但结余里要减掉它（是留给 11 月的）；
+     *   11 月（就是给它预留的那个月）：不再减了，这 500 直接算在 11 月的实际剩余里，等它真正扣款。
      */
+    const currentKey = month ? { year: month.year, month: month.month } : null;
+    const isReservedForLaterMonth = function (advance) {
+      if (advanceIsPaid(advance, reference)) return false;
+      if (!currentKey) return false;
+      return Month.compare(advanceTargetKey(advance), currentKey) > 0;
+    };
     const reservedThisMonth = Money.sum(advances
-      .filter(function (advance) { return !advanceIsPaid(advance, reference); })
+      .filter(isReservedForLaterMonth)
       .map(advanceOutstanding));
     const carriedReservations = Money.sum((pendingReservations || []).map(advanceOutstanding));
     const advanceReservedTotal = Money.round(reservedThisMonth + carriedReservations);
@@ -861,8 +876,8 @@
     }
 
     /**
-     * 更早月份登记、到本月还没到扣款日的预支：这些钱要继续预留。
-     * 钱没真出去（实际剩余里还在），但结余里不能算它是可花的。
+     * 更早月份登记的预支里，还需要在本月预留的那部分：
+     * 钱没真出去、而且它的目标月还在本月之后（到了目标月就不再预留了）。
      */
     function pendingReservationsFor(key, now) {
       const result = [];
@@ -870,7 +885,8 @@
         const monthKey = { year: month.year, month: month.month };
         if (Month.compare(monthKey, key) >= 0) return;
         month.advances.forEach(function (advance) {
-          if (!advanceIsPaid(advance, now)) result.push(advance);
+          if (advanceIsPaid(advance, now)) return;
+          if (Month.compare(advanceTargetKey(advance), key) > 0) result.push(advance);
         });
       });
       return result;
@@ -1333,6 +1349,9 @@
           if (input.note !== undefined) advance.note = input.note;
           if (input.targetYear !== undefined) advance.targetYear = input.targetYear;
           if (input.targetMonth !== undefined) advance.targetMonth = input.targetMonth;
+          if (input.paidOverride !== undefined) {
+            advance.paidOverride = typeof input.paidOverride === 'boolean' ? input.paidOverride : null;
+          }
           if (advance.repaidAmount > advance.amount) advance.repaidAmount = advance.amount;
           advance.updatedAt = new Date().toISOString();
         });

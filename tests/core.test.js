@@ -951,12 +951,13 @@ test('预支：预留会一直保留到扣款日（10 月结余减掉，但实�
   assert.equal(october.plannedBalance, 15500, '所以 10 月的结余要减掉这 500');
 
   const november = store.summary(NOV, now);
-  assert.equal(november.actualBalance, 24000);
-  assert.equal(november.plannedBalance, 23500, '扣款日之前也一直留着');
+  assert.equal(november.actualBalance, 24000, '钱一直在卡里，11 月当然包含它');
+  assert.equal(november.advanceReservedTotal, 0, '到了目标月就不再预留扣结余了');
+  assert.equal(november.plannedBalance, 24000, '11 月的结余不再减这 500');
 
   // 扣款日到了之后：钱真的出去，实际剩余减少，预留解除；全程只扣这一次
   const later = new Date(2026, 10, 5, 12);           // 11 月 5 日
-  assert.equal(store.summary(SEP, later).actualBalance, 7500, '钱在 9 月真的出去了');
+  assert.equal(store.summary(SEP, later).actualBalance, 7500, '钱真的出去了（在登记月体现）');
   assert.equal(store.summary(SEP, later).advanceReservedTotal, 0, '扣款后不再预留');
   assert.equal(store.summary(OCT, later).actualBalance, 15500, '10 月实际剩余随之减少');
   assert.equal(store.summary(OCT, later).plannedBalance, 15500, '也不再重复预留');
@@ -1023,6 +1024,42 @@ test('预支综合：9 月付车票 + 给 11 月预留，10 月的数字要对�
   assert.equal(after.plannedBalance, 8800, '结余 = 实际剩余 9300 − 预支预留 500 − 当月剩余预算 0');
   assert.equal(after.advanceReservedTotal, 500, '11 月那笔预留仍然挂着');
   assert.equal(after.plannedBalance + after.advanceReservedTotal + after.unspentBudget, after.actualBalance);
+});
+
+test('预支：明确选「还没花」时，即使扣款日是今天也只预留不扣现金', () => {
+  const store = createStore();
+  const SEP = { year: 2026, month: 9 };
+  const OCT = { year: 2026, month: 10 };
+  const NOV = { year: 2026, month: 11 };
+  [SEP, OCT, NOV].forEach(k => store.setIncome(8000, k));
+  const now = new Date(2026, 8, 24, 12);
+
+  // 9 月登记、扣款日就是今天，但明确选「还没花」（预留给 11 月）
+  store.addAdvance({
+    title: '11 月的预留',
+    amount: 500,
+    date: day(2026, 8, 24),
+    targetYear: 2026,
+    targetMonth: 11,
+    paidOverride: false
+  }, SEP);
+
+  const september = store.summary(SEP, now);
+  assert.equal(september.actualBalance, 8000, '钱没出去 → 9 月实际剩余不变');
+  assert.equal(september.plannedBalance, 7500, '结余里减掉 500');
+
+  const october = store.summary(OCT, now);
+  assert.equal(october.actualBalance, 16000, '10 月实际剩余里含这 500');
+  assert.equal(october.plannedBalance, 15500, '10 月结余也减掉 500');
+
+  const november = store.summary(NOV, now);
+  assert.equal(november.actualBalance, 24000, '11 月就是给它预留的月份，钱直接算在实际剩余里');
+  assert.equal(november.plannedBalance, 24000, '11 月不再预扣');
+
+  // 如果明确选「已经花了」，就当场从实际剩余里扣
+  store.updateAdvance(store.advances(SEP)[0].id, { paidOverride: true }, SEP);
+  assert.equal(store.summary(SEP, now).actualBalance, 7500, '已经花了 → 当场扣');
+  assert.equal(store.summary(OCT, now).actualBalance, 15500, '10 月随之减少');
 });
 
 // ---------------------------------------------------------------- 备份提醒
