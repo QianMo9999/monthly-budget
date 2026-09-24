@@ -429,13 +429,8 @@ defineMorphIcon();
     fabGlassFrame = 0;
     const fab = $('fab');
     if (!fab || !fab.isConnected) return;
-    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const scrollY = window.scrollY || window.pageYOffset || 0;
     const color = backgroundUnderFab(fab);
     fab.setAttribute('data-glass-tone', relativeLuminance(color) < 0.34 ? 'dark' : 'light');
-    fab.style.setProperty('--glass-edge-angle', reduceMotion ? '0deg' : ((scrollY * 0.24) % 360) + 'deg');
-    fab.style.setProperty('--glass-refract-x', reduceMotion ? '0px' : (Math.sin(scrollY * 0.014) * 2.2).toFixed(2) + 'px');
-    fab.style.setProperty('--glass-refract-y', reduceMotion ? '0px' : (Math.cos(scrollY * 0.011) * 1.6).toFixed(2) + 'px');
   }
 
   function scheduleFabGlassUpdate() {
