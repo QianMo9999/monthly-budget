@@ -1340,7 +1340,7 @@
       (month.carryOverOverride === null || month.carryOverOverride === undefined ? '' : esc(Money.plain(month.carryOverOverride))) + '">' +
       '<div class="hint">自动结转当前为：' + (store.settings.carryOverEnabled ? '开启' : '关闭') +
       '，自动值 ' + Money.format(store.carryOver(currentKey) || 0) +
-      '。手动填了金额就以你填的为准（即使自动结转是关闭的）。</div></div>' +
+      '。跨月预留现金会单独计算，不包含在这里；手动填了金额就以你填的为准。</div></div>' +
       '<div class="field"><label>本月备注（可选）</label>' +
       '<input id="month-note" type="text" value="' + esc(month.note) + '"></div>' +
       '<div class="sheet-actions">' +

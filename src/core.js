@@ -14,7 +14,7 @@
   'use strict';
 
   /** App 版本号：改了功能就 +1，设置里能看到，用来确认线上是否已更新 */
-  const VERSION = 'v1.7.2';
+  const VERSION = 'v1.7.3';
 
   // ---------------------------------------------------------------- 金额
   // 内部一律按“分”做整数运算，避免 0.1 + 0.2 这类浮点误差。
@@ -796,7 +796,7 @@
      * 但不是本月可以自由安排的结转；否则余额明细会把它混进「上月结转」，
      * 随后又在结余里减一次，看起来像重复计算。
      */
-    summary.availableCarryOver = Money.round(carry - carriedReservations);
+    summary.availableCarryOver = carry;
     summary.totalAvailable = Money.round(income + carry + ledgerIncomeTotal);
     /** 不含对账调整的账面余额，也是下次对账的基准。 */
     summary.balanceBeforeCarriedReservations = Money.round(
@@ -1011,12 +1011,22 @@
         if (!state.settings.carryOverEnabled) return 0;
         const previous = Month.prev(key);
         if (!findMonth(previous)) return 0;
-        return summarize(
+        const previousPending = pendingReservationsFor(previous, now);
+        const previousBalance = summarize(
           findMonth(previous),
           store.carryOver(previous, seen.concat([key]), now),
           now,
-          incomingAdvancesFor(previous)
+          incomingAdvancesFor(previous),
+          previousPending
         ).actualBalance;
+        /*
+         * 仍在预留中的跨月现金由 summary 单独带入，不能再混进普通结转。
+         * 到目标月份后它不再预留，会自然回到普通结转中。
+         */
+        const carriedSeparately = Money.sum(
+          pendingReservationsFor(key, now).map(advanceOutstanding)
+        );
+        return Money.round(previousBalance - carriedSeparately);
       },
 
       summary(key, now) {
