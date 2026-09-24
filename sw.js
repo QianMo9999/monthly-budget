@@ -3,9 +3,18 @@
  * 只在安全上下文（HTTPS 或 localhost）里生效，这正是托管到 GitHub Pages 的原因。
  */
 // 改动 App 文件后把版本号和 core.js 里的 VERSION 一起 +1，旧缓存就会自动清理
-const CACHE_NAME = 'monthly-budget-v2.2.1';
+const CACHE_NAME = 'monthly-budget-v2.3.0';
 const APP_SHELL = [
   './manifest.webmanifest',
+  './src/vendor/bottom-sheet/styles.css',
+  './src/vendor/bottom-sheet/index.js',
+  './src/vendor/bottom-sheet/LICENSE',
+  './src/vendor/morphicons/element.js',
+  './src/vendor/morphicons/controller-CXZuwJ_M.js',
+  './src/vendor/morphicons/dom.js',
+  './src/vendor/morphicons/normalize-CYnN3Npw.js',
+  './src/vendor/morphicons/spring-CFHloqPP.js',
+  './src/vendor/morphicons/LICENSE',
   './src/styles-v2.css',
   './src/core.js',
   './src/app.js',

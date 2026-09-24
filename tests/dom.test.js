@@ -11,7 +11,7 @@ const path = require('node:path');
 const ROOT = path.join(__dirname, '..');
 const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
 const app = fs.readFileSync(path.join(ROOT, 'src/app.js'), 'utf8');
-const stylesheet = html.match(/<link[^>]+rel="stylesheet"[^>]+href="([^"]+)"/);
+const stylesheet = html.match(/<link[^>]+rel="stylesheet"[^>]+href="([^"]*styles-v2\.css)"/);
 const css = stylesheet ? fs.readFileSync(path.join(ROOT, stylesheet[1]), 'utf8') : '';
 
 function matchAll(text, regex, group) {

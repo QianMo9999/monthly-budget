@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#f4f7fb" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#f2f6fb" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0d1422" media="(prefers-color-scheme: dark)">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -13,6 +13,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <link rel="icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="src/vendor/bottom-sheet/styles.css">
   <link rel="stylesheet" href="src/styles-v2.css">
 </head>
 <body>
@@ -62,7 +63,7 @@
       <div id="heroSub" class="hero-sub"></div>
     </section>
 
-    <section id="statTiles" class="tiles"></section>
+    <section id="statTiles" class="tiles hidden" aria-hidden="true"></section>
 
     <div class="summary-grid">
       <section class="card progress-card">
@@ -80,6 +81,7 @@
     </div>
 
     <nav class="tabs" role="tablist" aria-label="账目类型">
+      <span id="tabIndicator" class="tab-indicator" aria-hidden="true"></span>
       <button id="tab-budget" class="tab active" type="button" role="tab" aria-selected="true">预算<span class="tab-count"></span></button>
       <button id="tab-ledger" class="tab" type="button" role="tab" aria-selected="false">记账<span class="tab-count"></span></button>
       <button id="tab-advance" class="tab" type="button" role="tab" aria-selected="false">预支<span class="tab-count"></span></button>
@@ -90,11 +92,13 @@
 
   <button id="fab" class="fab" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>预算项目</span></button>
 
-  <div id="backdrop" class="backdrop hidden"></div>
-  <section id="sheet" class="sheet hidden" role="dialog" aria-modal="true" aria-label="操作面板" tabindex="-1"></section>
+  <div id="sheetRoot" class="bs-root">
+    <div id="backdrop" class="backdrop bs-backdrop hidden"></div>
+    <section id="sheet" class="sheet bs-sheet hidden" data-mode="bottom" role="dialog" aria-modal="true" aria-label="操作面板" tabindex="-1"></section>
+  </div>
   <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
 
   <script src="src/core.js"></script>
-  <script src="src/app.js"></script>
+  <script type="module" src="src/app.js"></script>
 </body>
 </html>

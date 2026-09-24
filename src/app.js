@@ -1,3 +1,8 @@
+import { BottomSheetEngine } from './vendor/bottom-sheet/index.js';
+import { defineMorphIcon } from './vendor/morphicons/element.js';
+
+defineMorphIcon();
+
 /*
  * 月账本 · 界面层
  * 依赖 core.js 暴露的 window.BudgetCore；数据保存在浏览器 localStorage。
@@ -57,6 +62,10 @@
   let sheetState = null;
   let breakdownExpanded = false;
   let sheetReturnFocus = null;
+  let sheetEngine = null;
+  let sheetPresentation = null;
+  let renderedActiveTab = null;
+  let tabIndicatorAnimation = null;
 
   const urlParams = new URLSearchParams(window.location.search);
   if (['budget', 'ledger', 'advance'].indexOf(urlParams.get('tab')) >= 0) {
@@ -407,22 +416,32 @@
     rows.push('<div class="stat-line total"><span class="k">结余（能自由安排的钱）</span><span class="v">' +
       Money.format(s.plannedBalance) + '</span></div>');
 
-    card.innerHTML =
-      '<div class="breakdown-head">' +
-      '<div><div class="breakdown-title">余额明细</div>' +
-      '<div class="breakdown-caption">看清每一笔钱怎么组成</div></div>' +
-      '<button class="breakdown-toggle" type="button" data-toggle-breakdown="1" aria-expanded="' +
-      (breakdownExpanded ? 'true' : 'false') + '">' +
-      '<span>' + (breakdownExpanded ? '收起' : '查看明细') + '</span>' +
-      '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5.5 7.5 10 12l4.5-4.5"/></svg></button>' +
-      '</div>' +
-      (breakdownExpanded
-        ? '<div class="breakdown-body">' + rows.join('') + '</div>'
-        : '<div class="breakdown-summary">' +
-          '<div><span>实际剩余</span><strong>' + Money.format(s.actualBalance) + '</strong></div>' +
-          '<i></i>' +
-          '<div><span>可用结余</span><strong>' + Money.format(s.plannedBalance) + '</strong></div>' +
-          '</div>');
+    if (!card.querySelector('.breakdown-head')) {
+      card.innerHTML =
+        '<div class="breakdown-head">' +
+        '<div><div class="breakdown-title">余额明细</div>' +
+        '<div class="breakdown-caption">看清每一笔钱怎么组成</div></div>' +
+        '<button class="breakdown-toggle" type="button" data-toggle-breakdown="1" aria-expanded="false">' +
+        '<span>查看明细</span>' +
+        '<morph-icon class="breakdown-morph" icon="M5.5 7.5 10 12l4.5-4.5" size="16" stroke-width="1.8" reduced-motion="user"></morph-icon>' +
+        '</button></div><div class="breakdown-content"></div>';
+    }
+
+    const toggle = card.querySelector('.breakdown-toggle');
+    const morph = card.querySelector('.breakdown-morph');
+    toggle.setAttribute('aria-expanded', breakdownExpanded ? 'true' : 'false');
+    toggle.querySelector('span').textContent = breakdownExpanded ? '收起' : '查看明细';
+    const morphPath = breakdownExpanded
+      ? 'M5.5 12.5 10 8l4.5 4.5'
+      : 'M5.5 7.5 10 12l4.5-4.5';
+    if (morph) morph.icon = morphPath;
+    card.querySelector('.breakdown-content').innerHTML = breakdownExpanded
+      ? '<div class="breakdown-body">' + rows.join('') + '</div>'
+      : '<div class="breakdown-summary">' +
+        '<div><span>实际剩余</span><strong>' + Money.format(s.actualBalance) + '</strong></div>' +
+        '<i></i>' +
+        '<div><span>可用结余</span><strong>' + Money.format(s.plannedBalance) + '</strong></div>' +
+        '</div>';
   }
 
   /** 备份提醒：手机上的浏览器存储有可能被系统清掉，定期导出一次最保险。 */
@@ -603,6 +622,66 @@
       node.setAttribute('aria-selected', tab === activeTab ? 'true' : 'false');
       const countNode = node.querySelector('.tab-count');
       if (countNode) countNode.textContent = counts[tab] > 0 ? ' ' + counts[tab] : '';
+    });
+    positionTabIndicator(renderedActiveTab !== null && renderedActiveTab !== activeTab);
+    renderedActiveTab = activeTab;
+  }
+
+  function positionTabIndicator(shouldAnimate) {
+    const indicator = $('tabIndicator');
+    const target = $('tab-' + activeTab);
+    if (!indicator || !target) return;
+
+    window.requestAnimationFrame(function () {
+      const targetLeft = target.offsetLeft;
+      const targetWidth = target.offsetWidth;
+      const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const currentStyle = window.getComputedStyle(indicator);
+      const fromLeft = Number.parseFloat(currentStyle.left) || targetLeft;
+      const fromWidth = Number.parseFloat(currentStyle.width) || targetWidth;
+
+      if (tabIndicatorAnimation) {
+        tabIndicatorAnimation.cancel();
+        tabIndicatorAnimation = null;
+      }
+      if (!shouldAnimate || reduceMotion || typeof indicator.animate !== 'function') {
+        indicator.style.left = targetLeft + 'px';
+        indicator.style.width = targetWidth + 'px';
+        return;
+      }
+
+      const movingRight = targetLeft >= fromLeft;
+      const fromRight = fromLeft + fromWidth;
+      const targetRight = targetLeft + targetWidth;
+      const stretchedLeft = movingRight ? fromLeft : targetLeft;
+      const stretchedWidth = Math.max(
+        movingRight ? targetRight - fromLeft : fromRight - targetLeft,
+        targetWidth * 2.08
+      );
+      const midwayLeft = movingRight
+        ? fromLeft + (targetLeft - fromLeft) * 0.42
+        : targetLeft;
+      const midwayWidth = movingRight
+        ? stretchedWidth
+        : fromRight - midwayLeft;
+
+      tabIndicatorAnimation = indicator.animate([
+        { left: fromLeft + 'px', width: fromWidth + 'px', offset: 0 },
+        { left: fromLeft + 'px', width: (fromWidth + (stretchedWidth - fromWidth) * 0.54) + 'px', offset: 0.22 },
+        { left: midwayLeft + 'px', width: midwayWidth + 'px', offset: 0.52 },
+        { left: (targetLeft + (movingRight ? 2 : -2)) + 'px', width: Math.max(1, targetWidth - 2) + 'px', offset: 0.82 },
+        { left: (targetLeft + (movingRight ? -1 : 1)) + 'px', width: (targetWidth + 1) + 'px', offset: 0.92 },
+        { left: targetLeft + 'px', width: targetWidth + 'px', offset: 1 }
+      ], {
+        duration: 470,
+        easing: 'cubic-bezier(.2,.9,.22,1)',
+        fill: 'forwards'
+      });
+      tabIndicatorAnimation.addEventListener('finish', function () {
+        indicator.style.left = targetLeft + 'px';
+        indicator.style.width = targetWidth + 'px';
+        tabIndicatorAnimation = null;
+      }, { once: true });
     });
   }
 
@@ -819,38 +898,121 @@
 
   function openSheet(html, state) {
     if ($('sheet').classList.contains('hidden')) sheetReturnFocus = document.activeElement;
+    if (sheetEngine) {
+      sheetEngine.destroy();
+      sheetEngine = null;
+    }
     sheetState = state || null;
-    $('sheet').innerHTML = '<div class="sheet-grabber"></div>' + html;
+    $('sheet').innerHTML =
+      '<div class="sheet-grabber bs-handle" role="slider" tabindex="0" aria-label="拖动调整面板高度"></div>' +
+      '<div class="sheet-content bs-content">' + html + '</div>';
     $('sheet').classList.remove('hidden');
     $('backdrop').classList.remove('hidden');
+    sheetPresentation = window.matchMedia('(max-width: 699px)').matches ? 'mobile' : 'desktop';
     lockBodyScroll();
+
+    if (sheetPresentation === 'mobile') {
+      const engine = new BottomSheetEngine({
+        element: $('sheet'),
+        handle: $('sheet').querySelector('.sheet-grabber'),
+        scrollContainer: $('sheet').querySelector('.sheet-content'),
+        backdrop: $('backdrop'),
+        snapPoints: [
+          { id: 'closed', size: 0 },
+          { id: 'compact', size: '64dvh' },
+          { id: 'full', size: '92dvh' }
+        ],
+        allowed: ['closed', 'compact', 'full'],
+        initial: 'closed',
+        animation: 'ios-spring',
+        settleAnimation: 'waapi',
+        rubberBand: true,
+        flickVelocity: 0.65,
+        dragThreshold: 18,
+        dragFrom: 'handle',
+        dragFromContent: true,
+        focusTrap: true,
+        initialFocus: false,
+        closeOnEscape: true,
+        lockBodyScroll: false,
+        radius: 22,
+        maxHeight: '92dvh',
+        returnFocusTo: sheetReturnFocus
+      });
+      sheetEngine = engine;
+      engine.on('opened', function () {
+        if (sheetEngine === engine) $('sheet').focus({ preventScroll: true });
+      });
+      engine.on('closed', function () {
+        if (sheetEngine === engine) finalizeSheetClose(true);
+      });
+      engine.open('compact');
+      return;
+    }
+
     window.requestAnimationFrame(function () { $('sheet').focus({ preventScroll: true }); });
   }
 
   function closeSheet() {
     sheetState = null;
+    if (sheetPresentation === 'mobile' && sheetEngine) {
+      const engine = sheetEngine;
+      // 视觉关闭期间仍保留内联滚动锁；先撤掉状态标记，便于后续弹层立即接管。
+      document.body.classList.remove('sheet-open');
+      engine.close().catch(function () {
+        if (sheetEngine === engine) finalizeSheetClose(true);
+      });
+      return;
+    }
+    finalizeSheetClose(false);
+  }
+
+  function finalizeSheetClose(engineManagedFocus) {
+    const engine = sheetEngine;
+    sheetEngine = null;
+    sheetState = null;
     $('sheet').classList.add('hidden');
     $('backdrop').classList.add('hidden');
     $('sheet').innerHTML = '';
+    if (engine) engine.destroy();
     unlockBodyScroll();
-    if (sheetReturnFocus && sheetReturnFocus.isConnected) sheetReturnFocus.focus({ preventScroll: true });
+    if (!engineManagedFocus && sheetReturnFocus && sheetReturnFocus.isConnected) {
+      sheetReturnFocus.focus({ preventScroll: true });
+    }
     sheetReturnFocus = null;
+    sheetPresentation = null;
   }
 
   // 弹层打开时锁住背后的页面，避免「滑动小页面却把主页面带着滚」
   let lockedScrollY = 0;
+  let bodyScrollLocked = false;
 
   function lockBodyScroll() {
-    if (document.body.classList.contains('sheet-open')) return;
+    if (bodyScrollLocked) {
+      document.body.classList.add('sheet-open');
+      return;
+    }
     lockedScrollY = window.scrollY || window.pageYOffset || 0;
     document.body.style.top = '-' + lockedScrollY + 'px';
+    document.body.style.position = 'fixed';
+    document.body.style.left = '0';
+    document.body.style.right = '0';
+    document.body.style.width = '100%';
+    document.body.style.overflow = 'hidden';
     document.body.classList.add('sheet-open');
+    bodyScrollLocked = true;
   }
 
   function unlockBodyScroll() {
-    if (!document.body.classList.contains('sheet-open')) return;
+    if (!bodyScrollLocked) return;
     document.body.classList.remove('sheet-open');
     document.body.style.top = '';
+    document.body.style.position = '';
+    document.body.style.left = '';
+    document.body.style.right = '';
+    document.body.style.width = '';
+    document.body.style.overflow = '';
+    bodyScrollLocked = false;
     window.scrollTo(0, lockedScrollY);
   }
 
@@ -1609,6 +1771,50 @@
     render();
   }
 
+  // 按压反馈只在一次完整的点击后回弹；拖动离开按钮不会误触发。
+  const pressedButtons = new WeakMap();
+
+  function releaseButton(button) {
+    button.classList.remove('keyboard-pressed', 'spring-release');
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    void button.offsetWidth;
+    button.classList.add('spring-release');
+    button.addEventListener('animationend', function clearSpring() {
+      button.classList.remove('spring-release');
+    }, { once: true });
+  }
+
+  document.addEventListener('pointerdown', function (event) {
+    const button = event.target.closest('button');
+    if (!button || button.disabled) return;
+    pressedButtons.set(button, { x: event.clientX, y: event.clientY });
+  });
+
+  document.addEventListener('pointerup', function (event) {
+    const button = event.target.closest('button');
+    if (!button || !pressedButtons.has(button)) return;
+    const start = pressedButtons.get(button);
+    pressedButtons.delete(button);
+    if (Math.hypot(event.clientX - start.x, event.clientY - start.y) <= 10) releaseButton(button);
+  });
+
+  document.addEventListener('pointercancel', function (event) {
+    const button = event.target.closest('button');
+    if (button) pressedButtons.delete(button);
+  });
+
+  document.addEventListener('keydown', function (event) {
+    if (event.repeat || (event.key !== 'Enter' && event.key !== ' ')) return;
+    const button = event.target.closest('button');
+    if (button && !button.disabled) button.classList.add('keyboard-pressed');
+  });
+
+  document.addEventListener('keyup', function (event) {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    const button = event.target.closest('button');
+    if (button && button.classList.contains('keyboard-pressed')) releaseButton(button);
+  });
+
   // ---------------------------------------------------------------- 事件
 
   $('prevMonth').addEventListener('click', function () {
@@ -1690,7 +1896,7 @@
 
   // 弹层内事件：分类选择 / 按钮动作
   $('sheet').addEventListener('click', function (event) {
-    const modeChip = event.target.closest('[data-mode]');
+    const modeChip = event.target.closest('button[data-mode]');
     if (modeChip) {
       const draft = readItemDraft();
       draft.mode = modeChip.getAttribute('data-mode');
