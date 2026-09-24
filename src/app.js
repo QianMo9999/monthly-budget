@@ -693,8 +693,8 @@ defineMorphIcon();
     if (!indicator || !target) return;
 
     window.requestAnimationFrame(function () {
-      const targetWidth = target.offsetWidth;
-      const targetLeft = target.offsetLeft;
+      const targetWidth = target.offsetWidth * 0.8;
+      const targetLeft = target.offsetLeft + (target.offsetWidth - targetWidth) / 2;
       const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       const currentStyle = window.getComputedStyle(indicator);
       const fromLeft = Number.parseFloat(currentStyle.left) || targetLeft;
@@ -713,25 +713,21 @@ defineMorphIcon();
       const movingRight = targetLeft >= fromLeft;
       const fromRight = fromLeft + fromWidth;
       const targetRight = targetLeft + targetWidth;
-      const delayedLeft = movingRight
-        ? fromLeft
-        : fromLeft + (targetLeft - fromLeft) * 0.58;
-      const delayedRight = movingRight
-        ? fromRight + (targetRight - fromRight) * 0.58
-        : fromRight;
-      const midwayLeft = movingRight
-        ? fromLeft + (targetLeft - fromLeft) * 0.44
+      const leadingLeft = movingRight ? fromLeft : targetLeft;
+      const leadingRight = movingRight ? targetRight : fromRight;
+      const leadingWidth = Math.max(1, leadingRight - leadingLeft);
+      const catchupLeft = movingRight
+        ? fromLeft + (targetLeft - fromLeft) * 0.52
         : targetLeft - 2;
-      const midwayRight = movingRight
+      const catchupRight = movingRight
         ? targetRight + 2
-        : fromRight + (targetRight - fromRight) * 0.44;
-      const delayedWidth = Math.max(delayedRight - delayedLeft, targetWidth * 2.08);
-      const midwayWidth = Math.max(midwayRight - midwayLeft, targetWidth * 2.08);
+        : fromRight + (targetRight - fromRight) * 0.52;
+      const catchupWidth = Math.max(1, catchupRight - catchupLeft);
 
       tabIndicatorAnimation = indicator.animate([
         { left: fromLeft + 'px', width: fromWidth + 'px', offset: 0 },
-        { left: delayedLeft + 'px', width: delayedWidth + 'px', offset: 0.16 },
-        { left: midwayLeft + 'px', width: midwayWidth + 'px', offset: 0.52 },
+        { left: leadingLeft + 'px', width: leadingWidth + 'px', offset: 0.16 },
+        { left: catchupLeft + 'px', width: catchupWidth + 'px', offset: 0.52 },
         { left: (targetLeft + (movingRight ? 2 : -2)) + 'px', width: Math.max(1, targetWidth - 2) + 'px', offset: 0.82 },
         { left: (targetLeft + (movingRight ? -1 : 1)) + 'px', width: (targetWidth + 1) + 'px', offset: 0.92 },
         { left: targetLeft + 'px', width: targetWidth + 'px', offset: 1 }
