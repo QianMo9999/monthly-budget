@@ -16,6 +16,9 @@
   --red-soft: #fae9ea;
   --orange: #a55e0b;
   --orange-soft: #f9edda;
+  --hero: #1f2933;
+  --hero-negative: #883e45;
+  --hero-shadow: rgba(15, 23, 42, 0.16);
   --glass: rgba(250, 252, 251, 0.72);
   --glass-strong: rgba(255, 255, 255, 0.88);
   --glass-stroke: rgba(255, 255, 255, 0.88);
@@ -45,6 +48,9 @@
     --red-soft: #442326;
     --orange: #efb264;
     --orange-soft: #3d2e19;
+    --hero: #202a31;
+    --hero-negative: #71383e;
+    --hero-shadow: rgba(0, 0, 0, 0.28);
     --glass: rgba(24, 30, 27, 0.74);
     --glass-strong: rgba(27, 34, 30, 0.9);
     --glass-stroke: rgba(255, 255, 255, 0.16);
@@ -163,12 +169,12 @@ main { padding: 4px 12px 28px; max-width: 720px; margin: 0 auto; }
   margin-top: 8px;
   padding: 20px;
   border-radius: 24px;
-  background: linear-gradient(135deg, #245cf5 0%, #3978ff 52%, #69a0ff 100%);
+  background: var(--hero);
   color: #fff;
   box-shadow: 0 14px 34px rgba(47, 107, 255, 0.25);
 }
 
-.hero.negative { background: linear-gradient(140deg, #e5484d, #f0666a 60%, #ff8a8d); box-shadow: 0 12px 30px rgba(229, 72, 77, 0.28); }
+.hero.negative { background: var(--hero-negative); box-shadow: 0 12px 30px var(--hero-shadow); }
 
 .hero .hero-label { font-size: 13px; font-weight: 600; opacity: 0.88; letter-spacing: 0; }
 .hero .hero-top { display: flex; align-items: center; justify-content: space-between; }
@@ -1005,14 +1011,15 @@ main {
   margin-top: 0;
   padding: 24px;
   border-radius: 8px;
-  background: linear-gradient(135deg, #173d31 0%, #176b52 60%, #287960 100%);
-  box-shadow: 0 14px 32px rgba(23, 72, 56, 0.18);
+  background: var(--hero);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 12px 28px var(--hero-shadow);
   cursor: pointer;
 }
 
 .hero.negative {
-  background: linear-gradient(135deg, #84363b, #b84349 68%, #c95b60);
-  box-shadow: 0 14px 32px rgba(143, 52, 58, 0.2);
+  background: var(--hero-negative);
+  box-shadow: 0 12px 28px var(--hero-shadow);
 }
 
 .hero .hero-label {
