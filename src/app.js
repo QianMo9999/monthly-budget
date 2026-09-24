@@ -633,8 +633,10 @@ defineMorphIcon();
     if (!indicator || !target) return;
 
     window.requestAnimationFrame(function () {
-      const targetLeft = target.offsetLeft;
-      const targetWidth = target.offsetWidth;
+      const targetLabel = target.querySelector('.tab-label');
+      const labelWidth = targetLabel ? targetLabel.offsetWidth : 28;
+      const targetWidth = Math.max(26, Math.min(34, labelWidth));
+      const targetLeft = target.offsetLeft + (target.offsetWidth - targetWidth) / 2;
       const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       const currentStyle = window.getComputedStyle(indicator);
       const fromLeft = Number.parseFloat(currentStyle.left) || targetLeft;
@@ -653,21 +655,24 @@ defineMorphIcon();
       const movingRight = targetLeft >= fromLeft;
       const fromRight = fromLeft + fromWidth;
       const targetRight = targetLeft + targetWidth;
-      const stretchedLeft = movingRight ? fromLeft : targetLeft;
-      const stretchedWidth = Math.max(
-        movingRight ? targetRight - fromLeft : fromRight - targetLeft,
-        targetWidth * 2.08
-      );
+      const delayedLeft = movingRight
+        ? fromLeft
+        : fromLeft + (targetLeft - fromLeft) * 0.58;
+      const delayedRight = movingRight
+        ? fromRight + (targetRight - fromRight) * 0.58
+        : fromRight;
       const midwayLeft = movingRight
-        ? fromLeft + (targetLeft - fromLeft) * 0.42
-        : targetLeft;
-      const midwayWidth = movingRight
-        ? stretchedWidth
-        : fromRight - midwayLeft;
+        ? fromLeft + (targetLeft - fromLeft) * 0.44
+        : targetLeft - 2;
+      const midwayRight = movingRight
+        ? targetRight + 2
+        : fromRight + (targetRight - fromRight) * 0.44;
+      const delayedWidth = Math.max(delayedRight - delayedLeft, targetWidth * 2.08);
+      const midwayWidth = Math.max(midwayRight - midwayLeft, targetWidth * 2.08);
 
       tabIndicatorAnimation = indicator.animate([
         { left: fromLeft + 'px', width: fromWidth + 'px', offset: 0 },
-        { left: fromLeft + 'px', width: (fromWidth + (stretchedWidth - fromWidth) * 0.54) + 'px', offset: 0.22 },
+        { left: delayedLeft + 'px', width: delayedWidth + 'px', offset: 0.22 },
         { left: midwayLeft + 'px', width: midwayWidth + 'px', offset: 0.52 },
         { left: (targetLeft + (movingRight ? 2 : -2)) + 'px', width: Math.max(1, targetWidth - 2) + 'px', offset: 0.82 },
         { left: (targetLeft + (movingRight ? -1 : 1)) + 'px', width: (targetWidth + 1) + 'px', offset: 0.92 },

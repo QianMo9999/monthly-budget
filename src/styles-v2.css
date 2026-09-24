@@ -519,32 +519,37 @@ main { width: min(100%, 880px); margin-inline: auto; padding: 0 16px 32px; }
 .tabs {
   position: relative;
   margin: 18px 0 10px;
-  padding: 3px;
+  padding: 0;
   display: flex;
-  gap: 2px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--surface-pressed);
-  overflow: hidden;
+  gap: 0;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  overflow: visible;
 }
 
 .tab-indicator {
   position: absolute;
-  z-index: 0;
-  top: 3px;
-  bottom: 3px;
-  left: 3px;
-  width: calc((100% - 10px) / 3);
-  border-radius: 6px;
+  z-index: 2;
+  left: calc(16.666% - 14px);
+  bottom: -1px;
+  width: 28px;
+  height: 3px;
+  border-radius: 2px;
   background: var(--action);
-  box-shadow: 0 5px 14px rgba(40, 120, 238, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.24);
+  box-shadow: 0 2px 7px rgba(40, 120, 238, 0.28);
   pointer-events: none;
   will-change: left, width;
 }
 
-.tab { position: relative; z-index: 1; min-height: 44px; flex: 1; padding: 8px; border-radius: 6px; color: var(--muted); font-size: 14px; font-weight: 650; white-space: nowrap; }
-.tab.active { color: var(--action-text); background: transparent; box-shadow: none; }
-.tab-count { font-size: 12px; font-variant-numeric: tabular-nums; }
+.tab { position: relative; z-index: 1; min-height: 48px; flex: 1; padding: 10px 8px 12px; border-radius: 0; color: var(--muted); background: transparent; font-size: 14px; font-weight: 620; white-space: nowrap; }
+.tab.active { color: var(--accent-strong); background: transparent; box-shadow: none; font-weight: 720; }
+.tab:active,
+.tab.keyboard-pressed { transform: none; box-shadow: none !important; }
+.tab.spring-release { animation: none !important; }
+.tab-count { color: var(--faint); font-size: 11px; font-variant-numeric: tabular-nums; }
+.tab.active .tab-count { color: var(--accent); }
 
 .section-title {
   margin: 16px 2px 8px;
@@ -1022,7 +1027,6 @@ main { width: min(100%, 880px); margin-inline: auto; padding: 0 16px 32px; }
   .topbar .icon-btn,
   .month-label,
   .ghost-btn,
-  .tabs,
   .fab {
     background: var(--glass);
     border-color: var(--glass-line);
@@ -1031,7 +1035,6 @@ main { width: min(100%, 880px); margin-inline: auto; padding: 0 16px 32px; }
     box-shadow: inset 0 1px 0 var(--glass-line), var(--shadow-soft);
   }
 
-  .tab.active { color: var(--action-text); background: color-mix(in srgb, var(--action) 92%, transparent); border: 1px solid var(--glass-line); }
   .fab { color: var(--action-text); background: color-mix(in srgb, var(--action) 92%, transparent); }
 
   .sheet {
@@ -1047,7 +1050,6 @@ main { width: min(100%, 880px); margin-inline: auto; padding: 0 16px 32px; }
   .topbar .icon-btn,
   .month-label,
   .ghost-btn,
-  .tabs,
   .sheet { background: var(--surface); -webkit-backdrop-filter: none; backdrop-filter: none; }
   .fab { color: var(--action-text); background: var(--action); -webkit-backdrop-filter: none; backdrop-filter: none; }
 }
