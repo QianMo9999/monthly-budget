@@ -57,6 +57,12 @@ test('余额明细默认收起', () => {
   assert.ok(app.includes('class="breakdown-summary"'), '收起时应显示余额摘要');
 });
 
+test('Liquid Glass 有渐进增强和辅助功能降级', () => {
+  assert.ok(css.includes('@supports ((-webkit-backdrop-filter:'), '应仅在支持背景模糊时启用玻璃材质');
+  assert.ok(css.includes('prefers-reduced-transparency: reduce'), '应尊重减少透明度设置');
+  assert.ok(css.includes('prefers-reduced-motion: reduce'), '应尊重减少动态效果设置');
+});
+
 // 之前有个真 bug：「删除这笔付款」按钮只写了 data-delete-payment，
 // 但弹层事件只分发 [data-action]，于是点了没反应。这条检查拦的就是这类错误。
 test('每个 data-* 属性都必须被代码读取（否则就是点了没反应）', () => {
