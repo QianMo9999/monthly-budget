@@ -344,14 +344,16 @@
     };
     const rows = [];
     rows.push(line('本月收入', s.income));
-    rows.push(line('上月结转', s.carryOver,
-      s.advanceCarriedTotal > 0 ? '其中含为后面月份预留的 ' + Money.format(s.advanceCarriedTotal) : ''));
+    rows.push(line(s.advanceCarriedTotal > 0 ? '上月可用结转' : '上月结转', s.availableCarryOver));
     if (s.ledgerIncomeTotal > 0) rows.push(line('零星收入', s.ledgerIncomeTotal));
     if (s.advanceIncomingTotal > 0) rows.push(line('上月已替你付的预支', s.advanceIncomingTotal, '本月记成已支付时会抵消'));
     if (s.reconciliationAdjustment !== 0) rows.push(line('对账调整', s.reconciliationAdjustment));
     rows.push(line('预算已支付', -s.paidTotal));
     if (s.ledgerTotal > 0) rows.push(line('零星支出', -s.ledgerTotal));
     if (s.advancePaidTotal > 0) rows.push(line('本月预支已花掉', -s.advancePaidTotal));
+    if (s.advanceCarriedTotal > 0) {
+      rows.push(line('加回跨月预留现金', s.advanceCarriedTotal, '钱仍在卡里，但不能自由安排'));
+    }
     rows.push('<div class="stat-line total"><span class="k">实际剩余（卡里的钱）</span><span class="v">' +
       Money.format(s.actualBalance) + '</span></div>');
     if (s.advanceReservedTotal > 0) {
@@ -416,7 +418,12 @@
     $('heroValue').textContent = Money.format(summary.plannedBalance);
     $('heroSub').innerHTML =
       '<span>收入 <strong>' + Money.format(summary.income) + '</strong></span>' +
-      (summary.carryOver !== 0 ? '<span>上月结转 <strong>' + Money.format(summary.carryOver) + '</strong></span>' : '') +
+      (summary.availableCarryOver !== 0
+        ? '<span>上月可用结转 <strong>' + Money.format(summary.availableCarryOver) + '</strong></span>'
+        : '') +
+      (summary.advanceCarriedTotal > 0
+        ? '<span>跨月预留现金 <strong>' + Money.format(summary.advanceCarriedTotal) + '</strong></span>'
+        : '') +
       (summary.ledgerIncomeTotal > 0 ? '<span>零星收入 <strong>' + Money.format(summary.ledgerIncomeTotal) + '</strong></span>' : '') +
       '<span>预算 <strong>−' + Money.format(summary.plannedTotal) + '</strong></span>' +
       (summary.overrunTotal > 0 ? '<span>超支 <strong>−' + Money.format(summary.overrunTotal) + '</strong></span>' : '') +

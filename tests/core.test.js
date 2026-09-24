@@ -1014,16 +1014,26 @@ test('预支综合：9 月付车票 + 给 11 月预留，10 月的数字要对�
 
   const before = store.summary(OCT, now);
   assert.equal(before.carryOver, 500, '9 月剩下的 500（预留的 500 没花掉，一直在卡里）');
-  assert.equal(before.actualBalance, 10000, '8800 + 500 结转 + 700 上月已付')
+  assert.equal(before.availableCarryOver, 0, '500 是跨月预留，不混进可自由安排的上月结转');
+  assert.equal(before.balanceBeforeCarriedReservations, 9500, '手动扣车票预算前：8800 + 700 = 9500');
+  assert.equal(before.actualBalance, 10000, '卡里还含有给 11 月预留的 500');
   assert.equal(before.plannedBalance, 9500, '实际剩余 − 预支待预留 500');
 
   const ticket = store.addItem({ name: '车票', category: 'transport', plannedAmount: 700 }, OCT);
   store.completeItem(ticket.id, 700, OCT);
   const after = store.summary(OCT, now);
-  assert.equal(after.actualBalance, 9300, '记成已付款后：卡里实际就是 9300');
+  assert.equal(after.balanceBeforeCarriedReservations, 8800, '9500 − 当月车票实际支付 700');
+  assert.equal(after.advanceCarriedTotal, 500, '9 月给 11 月预留的钱仍在卡里');
+  assert.equal(after.actualBalance, 9300, '本月账面 8800 + 跨月预留现金 500');
   assert.equal(after.plannedBalance, 8800, '结余 = 实际剩余 9300 − 预支预留 500 − 当月剩余预算 0');
   assert.equal(after.advanceReservedTotal, 500, '11 月那笔预留仍然挂着');
   assert.equal(after.plannedBalance + after.advanceReservedTotal + after.unspentBudget, after.actualBalance);
+
+  store.addItem({ name: '当月生活费', category: 'food', plannedAmount: 300 }, OCT);
+  const withCurrentBudget = store.summary(OCT, now);
+  assert.equal(withCurrentBudget.actualBalance, 9300, '未支付的当月预算不改变卡里的实际余额');
+  assert.equal(withCurrentBudget.unspentBudget, 300);
+  assert.equal(withCurrentBudget.plannedBalance, 8500, '9300 − 预支预留 500 − 当月预算 300');
 });
 
 test('预支：明确选「还没花」时，即使扣款日是今天也只预留不扣现金', () => {

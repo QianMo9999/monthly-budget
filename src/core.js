@@ -14,7 +14,7 @@
   'use strict';
 
   /** App 版本号：改了功能就 +1，设置里能看到，用来确认线上是否已更新 */
-  const VERSION = 'v1.7.1';
+  const VERSION = 'v1.7.2';
 
   // ---------------------------------------------------------------- 金额
   // 内部一律按“分”做整数运算，避免 0.1 + 0.2 这类浮点误差。
@@ -674,9 +674,8 @@
 
   /**
    * 口径：
-   *   结余（先把预算全部留出来）= 收入 + 上月结转 + 零星收入 − 预算计划总额 − 零星支出 − 预支未还
-   *   实际剩余（只扣已经花掉的）= 收入 + 上月结转 + 零星收入 − 预算已支付 − 零星支出 − 预支未还
-   *   两者之差 = 预算余额（计划 − 已付）
+   *   实际剩余 = 本月账面部分 + 仍在卡里的跨月预留现金
+   *   结余 = 实际剩余 − 预支待预留 − 当月未花预算
    *   超支 / 节省只做提示，不重复计入支出
    */
   function summarize(month, carryOver, now, incomingAdvances, pendingReservations) {
@@ -792,13 +791,23 @@
 
     /** 余额对账的调整额：把「漏记的钱」一次性补上。 */
     summary.reconciliationAdjustment = reconciliationAdjustment(month);
+    /*
+     * 更早月份留下、目前仍在卡里的预留现金要单列。它属于实际余额，
+     * 但不是本月可以自由安排的结转；否则余额明细会把它混进「上月结转」，
+     * 随后又在结余里减一次，看起来像重复计算。
+     */
+    summary.availableCarryOver = Money.round(carry - carriedReservations);
     summary.totalAvailable = Money.round(income + carry + ledgerIncomeTotal);
     /** 不含对账调整的账面余额，也是下次对账的基准。 */
-    summary.bookBalance = Money.round(
-      income + carry + ledgerIncomeTotal + advanceIncomingTotal
+    summary.balanceBeforeCarriedReservations = Money.round(
+      income + summary.availableCarryOver + ledgerIncomeTotal + advanceIncomingTotal
       - paidTotal - ledgerTotal - advancePaidTotal
+      + summary.reconciliationAdjustment
     );
-    summary.actualBalance = Money.round(summary.bookBalance + summary.reconciliationAdjustment);
+    summary.actualBalance = Money.round(
+      summary.balanceBeforeCarriedReservations + carriedReservations
+    );
+    summary.bookBalance = Money.round(summary.actualBalance - summary.reconciliationAdjustment);
     /**
      * 预算承诺额：每笔预算「按计划留、超支就按实际」，也就是 max(计划, 已付) 的合计。
      * 主结余 = 收入 + 结转 + 零星收入 − 预算承诺额 − 零星支出 − 预支未还。
@@ -806,14 +815,16 @@
     summary.committedBudget = Money.sum(items.map(function (item) {
       return itemCommittedAmount(item, reference);
     }));
-    /** 主结余：把预算先全部留出来之后还剩多少。 */
-    summary.plannedBalance = Money.round(
-      income + carry + ledgerIncomeTotal + advanceIncomingTotal - summary.committedBudget
-      - ledgerTotal - advancePaidTotal - advanceReservedTotal + summary.reconciliationAdjustment
-    );
     summary.budgetBalance = Money.round(plannedTotal - paidTotal);
     /** 还没花掉的预算（已经花掉的之外，还要占着的钱），主结余和实际剩余的差额就是它。 */
     summary.unspentBudget = Money.round(summary.committedBudget - paidTotal);
+    /**
+     * 主结余只从实际剩余推导：先减跨月预支预留，再减当月未花预算。
+     * 保持单一公式，避免新增余额来源后两套公式悄悄算出不同结果。
+     */
+    summary.plannedBalance = Money.round(
+      summary.actualBalance - advanceReservedTotal - summary.unspentBudget
+    );
     summary.totalSpending = Money.round(paidTotal + ledgerTotal + advancePaidTotal);
     summary.budgetProgress = Math.min(1.5, Math.max(0, Money.ratio(paidTotal, plannedTotal)));
     summary.spendingRatio = Math.min(1.5, Math.max(0, Money.ratio(summary.totalSpending, summary.totalAvailable)));
