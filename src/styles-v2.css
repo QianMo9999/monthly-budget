@@ -9,16 +9,16 @@
   --faint: #7d8a9d;
   --line: rgba(29, 59, 101, 0.14);
   --line-strong: rgba(29, 59, 101, 0.27);
-  --accent: #2563eb;
-  --accent-strong: #1d4ed8;
-  --accent-soft: #eaf1ff;
-  --action: #1e4ed8;
+  --accent: #3b7be6;
+  --accent-strong: #245fbd;
+  --accent-soft: #edf4ff;
+  --action: #356fda;
   --action-text: #ffffff;
-  --action-soft: #eaf1ff;
-  --hero: #102a43;
+  --action-soft: #edf4ff;
+  --hero: #2b669f;
   --hero-text: #f7faff;
-  --hero-muted: #b9c8dc;
-  --hero-good: #79dfb2;
+  --hero-muted: #d5e4f4;
+  --hero-good: #a9efce;
   --good: #047857;
   --good-soft: #e7f6ef;
   --bad: #c2414f;
@@ -30,7 +30,7 @@
   --glass-line: rgba(255, 255, 255, 0.74);
   --shadow: 0 14px 38px rgba(25, 52, 88, 0.14);
   --shadow-soft: 0 4px 16px rgba(25, 52, 88, 0.08);
-  --focus: rgba(37, 99, 235, 0.3);
+  --focus: rgba(59, 123, 230, 0.3);
   --radius: 8px;
   --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
@@ -52,7 +52,7 @@
     --action: #3f6fe5;
     --action-text: #ffffff;
     --action-soft: #1d3157;
-    --hero: #142e50;
+    --hero: #214f7b;
     --hero-text: #f7faff;
     --hero-muted: #bdcbe0;
     --hero-good: #78deb1;
@@ -1008,50 +1008,13 @@ main { width: min(100%, 880px); margin-inline: auto; padding: 0 16px 32px; }
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  main.data-refresh .hero-value {
-    animation: value-enter 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
-  }
-
-  main.data-refresh .hero-sub span,
-  main.data-refresh .tile,
-  main.data-refresh .summary-grid .card,
-  main.data-refresh #listArea .section-title,
-  main.data-refresh #listArea .day-header,
-  main.data-refresh #listArea .list,
-  main.data-refresh #listArea .empty {
-    animation: content-enter 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
-  }
-
-  main.data-refresh .hero-sub span:nth-child(2),
-  main.data-refresh .tile:nth-child(2) { animation-delay: 35ms; }
-  main.data-refresh .hero-sub span:nth-child(3),
-  main.data-refresh .tile:nth-child(3) { animation-delay: 60ms; }
-  main.data-refresh .hero-sub span:nth-child(4),
-  main.data-refresh .tile:nth-child(4) { animation-delay: 85ms; }
-  main.data-refresh .tile:nth-child(n + 5) { animation-delay: 105ms; }
-  main.data-refresh .summary-grid .card { animation-delay: 120ms; }
-  main.data-refresh .summary-grid .card:nth-child(2) { animation-delay: 145ms; }
-  main.data-refresh #listArea .section-title,
-  main.data-refresh #listArea .day-header,
-  main.data-refresh #listArea .list { animation-delay: 110ms; }
-
-  .tab.active { animation: tab-settle 220ms cubic-bezier(0.22, 1, 0.36, 1); }
+  .breakdown-body { animation: detail-enter 180ms cubic-bezier(0.22, 1, 0.36, 1) both; }
   .backdrop:not(.hidden) { animation: backdrop-enter 180ms ease-out both; }
   .toast:not(.hidden) { animation: toast-enter 220ms cubic-bezier(0.22, 1, 0.36, 1) both; }
 
-  @keyframes value-enter {
-    from { opacity: 0; transform: translateY(8px) scale(0.985); }
-    to { opacity: 1; transform: translateY(0) scale(1); }
-  }
-
-  @keyframes content-enter {
-    from { opacity: 0; transform: translateY(7px); }
+  @keyframes detail-enter {
+    from { opacity: 0; transform: translateY(-3px); }
     to { opacity: 1; transform: translateY(0); }
-  }
-
-  @keyframes tab-settle {
-    from { transform: scale(0.97); }
-    to { transform: scale(1); }
   }
 
   @keyframes backdrop-enter {

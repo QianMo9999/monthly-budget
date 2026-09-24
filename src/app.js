@@ -372,16 +372,6 @@
     renderList();
     renderStorageBanner();
     renderBackupBanner();
-    restartDataMotion();
-  }
-
-  /** 数据刷新时重播一次短动效；动画不参与状态变更，也不依赖 animationend。 */
-  function restartDataMotion() {
-    const main = $('mainContent');
-    if (!main || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    main.classList.remove('data-refresh');
-    void main.offsetWidth;
-    main.classList.add('data-refresh');
   }
 
   /** 余额明细：把「实际剩余」和「结余」怎么算出来的一行行列清楚，避免数字对不上时说不清 */
