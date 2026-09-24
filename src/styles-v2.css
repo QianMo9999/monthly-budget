@@ -608,6 +608,9 @@ main { width: min(100%, 880px); margin-inline: auto; padding: 0 16px 32px; }
   text-overflow: ellipsis;
 }
 
+strong[data-count-key],
+span[data-count-key] { display: inline-block; }
+
 .breakdown-details {
   display: grid;
   grid-template-rows: 0fr;
@@ -1293,6 +1296,7 @@ main { width: min(100%, 880px); margin-inline: auto; padding: 0 16px 32px; }
   .hero:focus-visible,
   .hero:focus-visible::after { animation-play-state: paused; }
   button.spring-release { animation: button-spring 360ms cubic-bezier(0.2, 0.9, 0.25, 1.2); }
+  .number-ticking { animation: number-settle 520ms cubic-bezier(0.2, 0.82, 0.22, 1); }
   .toast:not(.hidden) { animation: toast-enter 220ms cubic-bezier(0.22, 1, 0.36, 1) both; }
 
   @keyframes hero-enter {
@@ -1318,6 +1322,12 @@ main { width: min(100%, 880px); margin-inline: auto; padding: 0 16px 32px; }
     0% { transform: scale(0.96); }
     62% { transform: scale(1.025); }
     100% { transform: scale(1); }
+  }
+
+  @keyframes number-settle {
+    0% { opacity: 0.72; transform: translateY(2px); }
+    62% { opacity: 1; transform: translateY(-1px); }
+    100% { opacity: 1; transform: translateY(0); }
   }
 
   @keyframes toast-enter {

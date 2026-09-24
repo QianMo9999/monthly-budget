@@ -94,6 +94,10 @@ defineMorphIcon();
   let renderedActiveTab = null;
   let tabIndicatorAnimation = null;
   let fabGlassFrame = 0;
+  let hasRendered = false;
+  const layoutAnimations = new Map();
+  const numberFrames = new Map();
+  const numberValues = new Map();
 
   const urlParams = new URLSearchParams(window.location.search);
   if (['budget', 'ledger', 'advance'].indexOf(urlParams.get('tab')) >= 0) {
@@ -399,7 +403,185 @@ defineMorphIcon();
 
   // ---------------------------------------------------------------- 渲染
 
+  const layoutTargets = [
+    ['hero', '#hero'],
+    ['progress', '.progress-card'],
+    ['breakdown', '#breakdownCard'],
+    ['list', '#listArea']
+  ];
+
+  function shouldAnimateRender() {
+    return hasRendered &&
+      !urlParams.has('selftest') &&
+      typeof document.documentElement.animate === 'function' &&
+      !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  }
+
+  function captureLayoutHeights(enabled) {
+    const heights = new Map();
+    if (!enabled) return heights;
+    layoutTargets.forEach(function (target) {
+      const key = target[0];
+      const node = document.querySelector(target[1]);
+      if (!node || node.classList.contains('hidden')) return;
+      heights.set(key, node.getBoundingClientRect().height);
+      const running = layoutAnimations.get(key);
+      if (running) running.cancel();
+      layoutAnimations.delete(key);
+      node.style.overflow = '';
+    });
+    return heights;
+  }
+
+  function animateLayoutHeights(previous) {
+    layoutTargets.forEach(function (target) {
+      const key = target[0];
+      const node = document.querySelector(target[1]);
+      const fromHeight = previous.get(key);
+      if (!node || !Number.isFinite(fromHeight) || node.classList.contains('hidden')) return;
+      const toHeight = node.getBoundingClientRect().height;
+      if (Math.abs(toHeight - fromHeight) < 1) return;
+
+      node.style.overflow = 'hidden';
+      const animation = node.animate([
+        { height: fromHeight + 'px' },
+        { height: toHeight + 'px' }
+      ], {
+        duration: 420,
+        easing: 'cubic-bezier(.2,.82,.22,1)',
+        fill: 'both'
+      });
+      layoutAnimations.set(key, animation);
+      animation.finished.then(function () {
+        if (layoutAnimations.get(key) !== animation) return;
+        layoutAnimations.delete(key);
+        animation.cancel();
+        node.style.overflow = '';
+      }).catch(function () {});
+    });
+  }
+
+  function formatCount(value, format, prefix, suffix) {
+    let text;
+    if (format === 'percent') text = Math.round(value).toLocaleString('zh-CN');
+    else if (format === 'integer') text = Math.round(value).toLocaleString('zh-CN');
+    else text = Money.format(value);
+    return (prefix || '') + text + (suffix || '');
+  }
+
+  function countAttributes(key, value, format, prefix, suffix) {
+    const finalText = countText(value, format, prefix, suffix);
+    return ' data-count-key="' + esc(key) + '"' +
+      ' data-count-value="' + Number(value) + '"' +
+      ' data-count-format="' + esc(format || 'money') + '"' +
+      (prefix ? ' data-count-prefix="' + esc(prefix) + '"' : '') +
+      (suffix ? ' data-count-suffix="' + esc(suffix) + '"' : '') +
+      ' aria-label="' + esc(finalText) + '"';
+  }
+
+  function countText(value, format, prefix, suffix) {
+    return formatCount(Number(value), format || 'money', prefix || '', suffix || '');
+  }
+
+  function countElement(tag, key, value, format, prefix, suffix, className) {
+    return '<' + tag + (className ? ' class="' + esc(className) + '"' : '') +
+      countAttributes(key, value, format, prefix, suffix) + '>' +
+      countText(value, format, prefix, suffix) + '</' + tag + '>';
+  }
+
+  function setCountTarget(node, key, value, format, prefix, suffix) {
+    if (!node) return;
+    node.dataset.countKey = key;
+    node.dataset.countValue = String(Number(value));
+    node.dataset.countFormat = format || 'money';
+    if (prefix) node.dataset.countPrefix = prefix;
+    else delete node.dataset.countPrefix;
+    if (suffix) node.dataset.countSuffix = suffix;
+    else delete node.dataset.countSuffix;
+    const finalText = countText(value, format, prefix, suffix);
+    node.setAttribute('aria-label', finalText);
+    node.textContent = finalText;
+  }
+
+  function clearCountTarget(node, text) {
+    if (!node) return;
+    delete node.dataset.countKey;
+    delete node.dataset.countValue;
+    delete node.dataset.countFormat;
+    delete node.dataset.countPrefix;
+    delete node.dataset.countSuffix;
+    node.removeAttribute('aria-label');
+    node.textContent = text;
+  }
+
+  function animateCountTargets(enabled) {
+    const nodes = Array.prototype.slice.call(document.querySelectorAll('[data-count-key][data-count-value]'));
+    const activeKeys = new Set(nodes.map(function (node) { return node.dataset.countKey; }));
+    numberFrames.forEach(function (frame, key) {
+      if (!activeKeys.has(key)) {
+        window.cancelAnimationFrame(frame);
+        numberFrames.delete(key);
+        numberValues.delete(key);
+      }
+    });
+
+    const ticking = [];
+    nodes.forEach(function (node) {
+      const key = node.dataset.countKey;
+      const target = Number(node.dataset.countValue);
+      const format = node.getAttribute('data-count-format') || 'money';
+      const prefix = node.getAttribute('data-count-prefix') || '';
+      const suffix = node.getAttribute('data-count-suffix') || '';
+      const previous = numberValues.has(key) ? numberValues.get(key) : target;
+      const oldFrame = numberFrames.get(key);
+      if (oldFrame) window.cancelAnimationFrame(oldFrame);
+      numberFrames.delete(key);
+
+      if (!enabled || !Number.isFinite(target) || Math.abs(target - previous) < 0.005) {
+        numberValues.set(key, target);
+        node.textContent = formatCount(target, format, prefix, suffix);
+        return;
+      }
+
+      ticking.push(node);
+      const startedAt = performance.now();
+      const duration = 520;
+      const step = function (now) {
+        if (!node.isConnected || node.dataset.countKey !== key) {
+          numberFrames.delete(key);
+          return;
+        }
+        const progress = Math.min(1, (now - startedAt) / duration);
+        const eased = 1 - Math.pow(1 - progress, 3);
+        const current = previous + (target - previous) * eased;
+        numberValues.set(key, current);
+        node.textContent = formatCount(current, format, prefix, suffix);
+        if (progress < 1) {
+          numberFrames.set(key, window.requestAnimationFrame(step));
+        } else {
+          numberFrames.delete(key);
+          numberValues.set(key, target);
+          node.textContent = formatCount(target, format, prefix, suffix);
+        }
+      };
+      numberFrames.set(key, window.requestAnimationFrame(step));
+    });
+
+    if (ticking.length > 0) {
+      ticking.forEach(function (node) { node.classList.remove('number-ticking'); });
+      void document.body.offsetWidth;
+      ticking.forEach(function (node) {
+        node.classList.add('number-ticking');
+        node.addEventListener('animationend', function clearNumberTick() {
+          node.classList.remove('number-ticking');
+        }, { once: true });
+      });
+    }
+  }
+
   function render() {
+    const animate = shouldAnimateRender();
+    const previousHeights = captureLayoutHeights(animate);
     renderHeader();
     renderHero();
     renderTiles();
@@ -409,6 +591,9 @@ defineMorphIcon();
     renderList();
     renderStorageBanner();
     renderBackupBanner();
+    animateCountTargets(animate);
+    if (animate) animateLayoutHeights(previousHeights);
+    hasRendered = true;
     scheduleFabGlassUpdate();
   }
 
@@ -471,32 +656,32 @@ defineMorphIcon();
     if (!card) return;
     const s = store.summary(currentKey);
     card.classList.toggle('expanded', breakdownExpanded);
-    const line = function (label, amount, note, tone) {
+    const line = function (key, label, amount, note, tone) {
       return '<div class="stat-line">' +
         '<span class="k">' + esc(label) + (note ? ' <span class="muted-note">' + esc(note) + '</span>' : '') + '</span>' +
-        '<span class="v ' + (tone || '') + '">' + (amount >= 0 ? '+' : '−') + Money.format(Math.abs(amount)) + '</span>' +
+        countElement('span', 'breakdown-' + key, Math.abs(amount), 'money', amount >= 0 ? '+' : '−', '', 'v ' + (tone || '')) +
         '</div>';
     };
     const rows = [];
-    rows.push(line('本月收入', s.income));
-    rows.push(line(s.advanceCarriedTotal > 0 ? '上月可用结转' : '上月结转', s.availableCarryOver));
-    if (s.ledgerIncomeTotal > 0) rows.push(line('零星收入', s.ledgerIncomeTotal));
-    if (s.advanceIncomingTotal > 0) rows.push(line('上月已替你付的预支', s.advanceIncomingTotal, '本月记成已支付时会抵消'));
-    if (s.reconciliationAdjustment !== 0) rows.push(line('对账调整', s.reconciliationAdjustment));
-    rows.push(line('预算已支付', -s.paidTotal));
-    if (s.ledgerTotal > 0) rows.push(line('零星支出', -s.ledgerTotal));
-    if (s.advancePaidTotal > 0) rows.push(line('本月预支已花掉', -s.advancePaidTotal));
+    rows.push(line('income', '本月收入', s.income));
+    rows.push(line('carry', s.advanceCarriedTotal > 0 ? '上月可用结转' : '上月结转', s.availableCarryOver));
+    if (s.ledgerIncomeTotal > 0) rows.push(line('ledger-income', '零星收入', s.ledgerIncomeTotal));
+    if (s.advanceIncomingTotal > 0) rows.push(line('advance-incoming', '上月已替你付的预支', s.advanceIncomingTotal, '本月记成已支付时会抵消'));
+    if (s.reconciliationAdjustment !== 0) rows.push(line('reconciliation', '对账调整', s.reconciliationAdjustment));
+    rows.push(line('paid', '预算已支付', -s.paidTotal));
+    if (s.ledgerTotal > 0) rows.push(line('ledger-expense', '零星支出', -s.ledgerTotal));
+    if (s.advancePaidTotal > 0) rows.push(line('advance-paid', '本月预支已花掉', -s.advancePaidTotal));
     if (s.advanceCarriedTotal > 0) {
-      rows.push(line('加回跨月预留现金', s.advanceCarriedTotal, '钱仍在卡里，但不能自由安排'));
+      rows.push(line('advance-carried', '加回跨月预留现金', s.advanceCarriedTotal, '钱仍在卡里，但不能自由安排'));
     }
-    rows.push('<div class="stat-line total"><span class="k">实际剩余（卡里的钱）</span><span class="v">' +
-      Money.format(s.actualBalance) + '</span></div>');
+    rows.push('<div class="stat-line total"><span class="k">实际剩余（卡里的钱）</span>' +
+      countElement('span', 'breakdown-actual-total', s.actualBalance, 'money', '', '', 'v') + '</div>');
     if (s.advanceReservedTotal > 0) {
-      rows.push(line('减去预支待预留', -s.advanceReservedTotal, '留给后面月份，不算本月可花'));
+      rows.push(line('advance-reserved', '减去预支待预留', -s.advanceReservedTotal, '留给后面月份，不算本月可花'));
     }
-    rows.push(line('减去未花预算', -s.unspentBudget, '还没花掉但已经留出来的预算'));
-    rows.push('<div class="stat-line total"><span class="k">结余（能自由安排的钱）</span><span class="v">' +
-      Money.format(s.plannedBalance) + '</span></div>');
+    rows.push(line('unspent-budget', '减去未花预算', -s.unspentBudget, '还没花掉但已经留出来的预算'));
+    rows.push('<div class="stat-line total"><span class="k">结余（能自由安排的钱）</span>' +
+      countElement('span', 'breakdown-planned-total', s.plannedBalance, 'money', '', '', 'v') + '</div>');
 
     if (!card.querySelector('.breakdown-head')) {
       card.innerHTML =
@@ -528,9 +713,9 @@ defineMorphIcon();
         '<div class="breakdown-body"></div></div></div>';
     }
     content.querySelector('.breakdown-summary').innerHTML =
-      '<div><span>实际剩余</span><strong>' + Money.format(s.actualBalance) + '</strong></div>' +
+      '<div><span>实际剩余</span>' + countElement('strong', 'breakdown-actual', s.actualBalance, 'money') + '</div>' +
       '<i></i>' +
-      '<div><span>可用结余</span><strong>' + Money.format(s.plannedBalance) + '</strong></div>';
+      '<div><span>可用结余</span>' + countElement('strong', 'breakdown-planned', s.plannedBalance, 'money') + '</div>';
     content.querySelector('.breakdown-body').innerHTML = rows.join('');
     content.querySelector('.breakdown-details').setAttribute('aria-hidden', breakdownExpanded ? 'false' : 'true');
   }
@@ -575,23 +760,23 @@ defineMorphIcon();
     const hero = $('hero');
     hero.classList.toggle('negative', summary.isBalanceNegative);
     $('heroLabel').textContent = Month.label(currentKey) + ' 可用结余';
-    $('heroValue').textContent = Money.format(summary.plannedBalance);
+    setCountTarget($('heroValue'), 'hero-balance', summary.plannedBalance, 'money');
     $('heroSub').innerHTML =
-      '<span>收入 <strong>' + Money.format(summary.income) + '</strong></span>' +
+      '<span>收入 ' + countElement('strong', 'hero-income', summary.income, 'money') + '</span>' +
       (summary.availableCarryOver !== 0
-        ? '<span>上月可用结转 <strong>' + Money.format(summary.availableCarryOver) + '</strong></span>'
+        ? '<span>上月可用结转 ' + countElement('strong', 'hero-carry', summary.availableCarryOver, 'money') + '</span>'
         : '') +
       (summary.advanceCarriedTotal > 0
-        ? '<span>跨月预留现金 <strong>' + Money.format(summary.advanceCarriedTotal) + '</strong></span>'
+        ? '<span>跨月预留现金 ' + countElement('strong', 'hero-advance-carried', summary.advanceCarriedTotal, 'money') + '</span>'
         : '') +
-      (summary.ledgerIncomeTotal > 0 ? '<span>零星收入 <strong>' + Money.format(summary.ledgerIncomeTotal) + '</strong></span>' : '') +
-      '<span>预算 <strong>−' + Money.format(summary.plannedTotal) + '</strong></span>' +
-      (summary.overrunTotal > 0 ? '<span>超支 <strong>−' + Money.format(summary.overrunTotal) + '</strong></span>' : '') +
-      (summary.ledgerTotal > 0 ? '<span>零星支出 <strong>−' + Money.format(summary.ledgerTotal) + '</strong></span>' : '') +
-      (summary.advancePaidTotal > 0 ? '<span>预支 <strong>−' + Money.format(summary.advancePaidTotal) + '</strong></span>' : '') +
-      (summary.advanceReservedTotal > 0 ? '<span>预支待预留 <strong>−' + Money.format(summary.advanceReservedTotal) + '</strong></span>' : '') +
+      (summary.ledgerIncomeTotal > 0 ? '<span>零星收入 ' + countElement('strong', 'hero-ledger-income', summary.ledgerIncomeTotal, 'money') + '</span>' : '') +
+      '<span>预算 ' + countElement('strong', 'hero-budget', summary.plannedTotal, 'money', '−') + '</span>' +
+      (summary.overrunTotal > 0 ? '<span>超支 ' + countElement('strong', 'hero-overrun', summary.overrunTotal, 'money', '−') + '</span>' : '') +
+      (summary.ledgerTotal > 0 ? '<span>零星支出 ' + countElement('strong', 'hero-ledger-expense', summary.ledgerTotal, 'money', '−') + '</span>' : '') +
+      (summary.advancePaidTotal > 0 ? '<span>预支 ' + countElement('strong', 'hero-advance-paid', summary.advancePaidTotal, 'money', '−') + '</span>' : '') +
+      (summary.advanceReservedTotal > 0 ? '<span>预支待预留 ' + countElement('strong', 'hero-advance-reserved', summary.advanceReservedTotal, 'money', '−') + '</span>' : '') +
       (summary.advanceIncomingTotal > 0
-        ? '<span>上月已付预支 <strong>' + Money.format(summary.advanceIncomingTotal) + '</strong>（不用再列预算）</span>'
+        ? '<span>上月已付预支 ' + countElement('strong', 'hero-advance-incoming', summary.advanceIncomingTotal, 'money') + '（不用再列预算）</span>'
         : '');
   }
 
@@ -692,13 +877,14 @@ defineMorphIcon();
     const fill = $('progressFill');
     fill.style.width = Math.min(100, s.budgetProgress * 100) + '%';
     fill.classList.toggle('over', s.budgetProgress >= 1);
-    $('progressPercent').textContent = s.plannedTotal > 0 ? percent + '%' : '暂无预算';
+    if (s.plannedTotal > 0) setCountTarget($('progressPercent'), 'progress-percent', percent, 'percent', '', '%');
+    else clearCountTarget($('progressPercent'), '暂无预算');
 
     $('progressFoot').innerHTML =
       '<span>已付 ' + Money.format(s.paidTotal) + ' / 计划 ' + Money.format(s.plannedTotal) + '</span>' +
-      '<span>' + (s.isOverBudget
-        ? '超预算 ' + Money.format(Math.abs(s.budgetBalance))
-        : '预算结余 ' + Money.format(s.budgetBalance)) + '</span>';
+      (s.isOverBudget
+        ? countElement('span', 'progress-balance', Math.abs(s.budgetBalance), 'money', '超预算 ')
+        : countElement('span', 'progress-balance', s.budgetBalance, 'money', '预算结余 '));
   }
 
   function renderTabs() {
@@ -712,7 +898,8 @@ defineMorphIcon();
       node.classList.toggle('active', tab === activeTab);
       node.setAttribute('aria-selected', tab === activeTab ? 'true' : 'false');
       const countNode = node.querySelector('.tab-count');
-      if (countNode) countNode.textContent = counts[tab] > 0 ? ' ' + counts[tab] : '';
+      if (counts[tab] > 0) setCountTarget(countNode, 'tab-' + tab + '-count', counts[tab], 'integer', ' ');
+      else clearCountTarget(countNode, '');
     });
     positionTabIndicator(renderedActiveTab !== null && renderedActiveTab !== activeTab);
     renderedActiveTab = activeTab;
@@ -844,10 +1031,11 @@ defineMorphIcon();
       if (done && over) detailParts.push('超 ' + Money.format(core.itemOverrun(item)));
 
       const amountNode = done
-        ? '<div class="amount ' + (over ? 'spend' : (core.itemSaved(item) > 0 ? 'income' : '')) + '">' + Money.format(paid) + '</div>'
+        ? countElement('div', 'budget-' + item.id + '-amount', paid, 'money', '', '',
+          'amount ' + (over ? 'spend' : (core.itemSaved(item) > 0 ? 'income' : '')))
         : (partial
           ? '<div class="amount">' + Money.format(paid) + '/' + Money.format(planned) + '</div>'
-          : '<div class="amount">' + Money.format(planned) + '</div>');
+          : countElement('div', 'budget-' + item.id + '-amount', planned, 'money', '', '', 'amount'));
 
       const action = done
         ? ''
@@ -900,8 +1088,8 @@ defineMorphIcon();
           '<div class="avatar ' + (income ? 'income' : '') + '">' + categorySvg(entry.category) + '</div>' +
           '<div class="main"><div class="title">' + esc(entry.title) + '</div>' +
           '<div class="sub">' + esc(subParts.join(' · ')) + '</div></div>' +
-          '<div class="amount ' + (income ? 'income' : 'spend') + '">' +
-          (income ? '+' : '-') + Money.format(entry.amount) + '</div>' +
+          countElement('div', 'ledger-' + entry.id + '-amount', entry.amount, 'money', income ? '+' : '-', '',
+            'amount ' + (income ? 'income' : 'spend')) +
           '</div>';
       }).join('');
       const dayParts = [];
@@ -948,7 +1136,7 @@ defineMorphIcon();
         '<div class="main"><div class="title">' + esc(advance.title) + '</div>' +
         '<div class="sub">' + statusBadge + esc(subParts.join(' · ')) + '</div></div>' +
         '<div class="row-actions">' +
-        '<div class="amount spend">' + Money.format(outstanding) + '</div>' +
+        countElement('div', 'advance-' + advance.id + '-amount', outstanding, 'money', '', '', 'amount spend') +
         '</div></div>';
     }).join('');
 
@@ -969,7 +1157,7 @@ defineMorphIcon();
         return '<div class="row"><div class="avatar">' + iconSvg('clock') + '</div>' +
           '<div class="main"><div class="title">上月（或更早）为「' + esc(advance.title) + '」预留</div>' +
           '<div class="sub">' + toDateInputValue(advance.date) + ' 扣款：' + explanation + '</div></div>' +
-          '<div class="amount muted">' + Money.format(core.advanceOutstanding(advance)) + '</div></div>';
+          countElement('div', 'advance-carried-' + advance.id, core.advanceOutstanding(advance), 'money', '', '', 'amount muted') + '</div>';
       }).join('') + '</div>';
     area.innerHTML =
       '<div class="section-title"><span>预支（提前为后面月份花钱 / 预留）</span><span>' + esc(headerParts.join(' · ')) + '</span></div>' +
@@ -979,7 +1167,7 @@ defineMorphIcon();
           '<div class="main"><div class="title">上月已提前支付</div>' +
           '<div class="sub">' + s.advanceIncomingCount + ' 笔共 ' + Money.format(s.advanceIncomingTotal) +
           '：上个月已经替你付过了，这部分已加回本月可用额度；本月为它记的预算结算时会刚好抵消</div></div>' +
-          '<div class="amount muted">' + Money.format(s.advanceIncomingTotal) + '</div></div></div>'
+          countElement('div', 'advance-incoming-total', s.advanceIncomingTotal, 'money', '', '', 'amount muted') + '</div></div>'
         : '') +
       '<div class="list">' + rows + '</div>';
   }
