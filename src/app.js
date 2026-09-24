@@ -55,7 +55,7 @@
   let currentKey = Month.current();
   let activeTab = 'budget';
   let sheetState = null;
-  let breakdownExpanded = true;
+  let breakdownExpanded = false;
 
   const urlParams = new URLSearchParams(window.location.search);
   if (['budget', 'ledger', 'advance'].indexOf(urlParams.get('tab')) >= 0) {
@@ -336,6 +336,7 @@
     const card = $('breakdownCard');
     if (!card) return;
     const s = store.summary(currentKey);
+    card.classList.toggle('expanded', breakdownExpanded);
     const line = function (label, amount, note, tone) {
       return '<div class="stat-line">' +
         '<span class="k">' + esc(label) + (note ? ' <span class="muted-note">' + esc(note) + '</span>' : '') + '</span>' +
@@ -365,14 +366,20 @@
 
     card.innerHTML =
       '<div class="breakdown-head">' +
-      '<span>余额明细</span>' +
-      '<button class="mini-btn ghost" type="button" data-toggle-breakdown="1">' +
-      (breakdownExpanded ? '收起' : '展开') + '</button>' +
+      '<div><div class="breakdown-title">余额明细</div>' +
+      '<div class="breakdown-caption">看清每一笔钱怎么组成</div></div>' +
+      '<button class="breakdown-toggle" type="button" data-toggle-breakdown="1" aria-expanded="' +
+      (breakdownExpanded ? 'true' : 'false') + '">' +
+      '<span>' + (breakdownExpanded ? '收起' : '查看明细') + '</span>' +
+      '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5.5 7.5 10 12l4.5-4.5"/></svg></button>' +
       '</div>' +
       (breakdownExpanded
         ? '<div class="breakdown-body">' + rows.join('') + '</div>'
-        : '<div class="breakdown-hint">实际剩余 ' + Money.format(s.actualBalance) +
-          ' · 结余 ' + Money.format(s.plannedBalance) + '（点「展开」看怎么算的）</div>');
+        : '<div class="breakdown-summary">' +
+          '<div><span>实际剩余</span><strong>' + Money.format(s.actualBalance) + '</strong></div>' +
+          '<i></i>' +
+          '<div><span>可用结余</span><strong>' + Money.format(s.plannedBalance) + '</strong></div>' +
+          '</div>');
   }
 
   /** 备份提醒：手机上的浏览器存储有可能被系统清掉，定期导出一次最保险。 */
