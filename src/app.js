@@ -6,7 +6,7 @@
   'use strict';
 
   const core = window.BudgetCore;
-  const { Money, Month, Categories, categoryLabel, categoryIcon } = core;
+  const { Money, Month, Categories, categoryLabel } = core;
 
   const STORAGE_KEY = 'monthly-budget-state-v1';
   const $ = function (id) { return document.getElementById(id); };
@@ -56,6 +56,7 @@
   let activeTab = 'budget';
   let sheetState = null;
   let breakdownExpanded = false;
+  let sheetReturnFocus = null;
 
   const urlParams = new URLSearchParams(window.location.search);
   if (['budget', 'ledger', 'advance'].indexOf(urlParams.get('tab')) >= 0) {
@@ -76,6 +77,48 @@
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;');
+  }
+
+  const IconPaths = {
+    housing: '<path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v10h13V10M9.5 20v-6h5v6"/>',
+    food: '<path d="M7 3v8M4 3v5a3 3 0 0 0 6 0V3M7 11v10M16 3v18M16 3c3 2 4 5 4 8h-4"/>',
+    transport: '<rect x="4" y="3" width="16" height="16" rx="3"/><path d="M4 11h16M8 7h8M8 19v2M16 19v2"/><circle cx="8" cy="15" r="1"/><circle cx="16" cy="15" r="1"/>',
+    utilities: '<path d="m13 2-8 12h7l-1 8 8-12h-7Z"/>',
+    communication: '<rect x="6" y="2.5" width="12" height="19" rx="2.5"/><path d="M10 5h4M11 18.5h2"/>',
+    medical: '<path d="M12 21s-7-4.4-7-11a4 4 0 0 1 7-2.7A4 4 0 0 1 19 10c0 6.6-7 11-7 11Z"/><path d="M9 12h6M12 9v6"/>',
+    education: '<path d="m3 9 9-5 9 5-9 5Z"/><path d="M7 12v4c2.5 2 7.5 2 10 0v-4M21 9v6"/>',
+    family: '<circle cx="9" cy="8" r="3"/><circle cx="17" cy="10" r="2"/><path d="M3 20c0-4 2.5-6 6-6s6 2 6 6M15 15c3.5 0 5 2 5 5"/>',
+    entertainment: '<path d="M8 8h8a5 5 0 0 1 4.7 6.7l-1 3a2 2 0 0 1-3.3.8L14 16h-4l-2.4 2.5a2 2 0 0 1-3.3-.8l-1-3A5 5 0 0 1 8 8Z"/><path d="M7 12v4M5 14h4M16 13h.01M18 15h.01"/>',
+    shopping: '<path d="M6 8h12l1 13H5Z"/><path d="M9 9V6a3 3 0 0 1 6 0v3"/>',
+    social: '<path d="M20 12v9H4v-9M2 8h20v4H2Z"/><path d="M12 8v13M12 8H7.5A2.5 2.5 0 1 1 10 5.5ZM12 8h4.5A2.5 2.5 0 1 0 14 5.5Z"/>',
+    travel: '<path d="m22 2-9 9M22 2l-6 19-4-9-9-4Z"/>',
+    saving: '<path d="M4 10h16M5 10v8M9 10v8M15 10v8M19 10v8M3 21h18M12 3l9 5H3Z"/>',
+    pet: '<circle cx="7.5" cy="8" r="2"/><circle cx="16.5" cy="8" r="2"/><circle cx="5" cy="13" r="2"/><circle cx="19" cy="13" r="2"/><path d="M8 19c0-3 1.8-5 4-5s4 2 4 5c0 2-2 3-4 1.5C10 22 8 21 8 19Z"/>',
+    other: '<circle cx="12" cy="12" r="9"/><path d="M8 12h.01M12 12h.01M16 12h.01"/>',
+    receipt: '<path d="M6 3h12v18l-3-2-3 2-3-2-3 2Z"/><path d="M9 8h6M9 12h6M9 16h3"/>',
+    coffee: '<path d="M4 7h13v7a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5Z"/><path d="M17 9h1a3 3 0 0 1 0 6h-1M7 3v2M11 3v2"/>',
+    calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/>',
+    clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+    undo: '<path d="m9 14-4-4 4-4"/><path d="M5 10h8a6 6 0 0 1 6 6v2"/>',
+    copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',
+    scale: '<path d="M12 3v18M5 6h14M5 6l-3 7h6ZM19 6l-3 7h6ZM8 21h8"/>',
+    save: '<path d="M5 3h12l3 3v15H4V4a1 1 0 0 1 1-1Z"/><path d="M8 3v6h8V3M8 21v-7h8v7"/>',
+    archive: '<rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v11h14V9M10 13h4"/>',
+    chart: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+    upload: '<path d="M12 16V4M7 9l5-5 5 5"/><path d="M5 14v6h14v-6"/>',
+    plus: '<path d="M12 5v14M5 12h14"/>',
+    minus: '<path d="M5 12h14"/>',
+    chevronLeft: '<path d="m15 18-6-6 6-6"/>',
+    chevronRight: '<path d="m9 18 6-6-6-6"/>'
+  };
+
+  function iconSvg(name, className) {
+    const paths = IconPaths[name] || IconPaths.other;
+    return '<svg class="ui-icon' + (className ? ' ' + className : '') + '" viewBox="0 0 24 24" aria-hidden="true">' + paths + '</svg>';
+  }
+
+  function categorySvg(id) {
+    return iconSvg(IconPaths[id] ? id : 'other', 'category-icon');
   }
 
   function todayISO() {
@@ -307,7 +350,7 @@
   function offlineStateText() {
     if (!('serviceWorker' in navigator)) return '当前浏览器不支持';
     if (!/^https?:$/.test(window.location.protocol)) return '用网页地址打开后会缓存';
-    return navigator.serviceWorker.controller ? '已缓存，断网也能用 ✓' : '首次打开后自动缓存';
+    return navigator.serviceWorker.controller ? '已缓存，断网也能用' : '首次打开后自动缓存';
   }
 
   function backupAgeText(now) {
@@ -557,6 +600,7 @@
     ['budget', 'ledger', 'advance'].forEach(function (tab) {
       const node = $('tab-' + tab);
       node.classList.toggle('active', tab === activeTab);
+      node.setAttribute('aria-selected', tab === activeTab ? 'true' : 'false');
       const countNode = node.querySelector('.tab-count');
       if (countNode) countNode.textContent = counts[tab] > 0 ? ' ' + counts[tab] : '';
     });
@@ -564,7 +608,7 @@
 
   function emptyState(icon, title, desc, buttonLabel, action) {
     return '<div class="list"><div class="empty">' +
-      '<div class="empty-icon">' + icon + '</div>' +
+      '<div class="empty-icon">' + iconSvg(icon) + '</div>' +
       '<div class="empty-title">' + esc(title) + '</div>' +
       '<div class="empty-desc">' + esc(desc) + '</div>' +
       (buttonLabel ? '<button class="mini-btn" data-empty-action="' + action + '">' + esc(buttonLabel) + '</button>' : '') +
@@ -579,7 +623,9 @@
     } else {
       renderAdvanceList();
     }
-    $('fab').textContent = activeTab === 'budget' ? '＋ 预算项目' : (activeTab === 'ledger' ? '＋ 记一笔' : '＋ 预支');
+    const label = activeTab === 'budget' ? '预算项目' : (activeTab === 'ledger' ? '记一笔' : '预支');
+    $('fab').innerHTML = iconSvg('plus') + '<span>' + label + '</span>';
+    $('fab').setAttribute('aria-label', '添加' + label);
   }
 
   function renderBudgetList() {
@@ -587,7 +633,7 @@
     const area = $('listArea');
     if (items.length === 0) {
       area.innerHTML = emptyState(
-        '🧾', '还没有预算项目', '比如房租、餐饮、交通，先定计划金额，花完再填实际支付。',
+        'receipt', '还没有预算项目', '比如房租、餐饮、交通，先定计划金额，花完再填实际支付。',
         '添加预算项目', 'add-item'
       );
       return;
@@ -644,7 +690,7 @@
       if (schedule && schedule.overrunSoFar > 0) detailParts.push('已超 ' + Money.format(schedule.overrunSoFar));
 
       return '<div class="row tappable" data-edit-item="' + item.id + '">' +
-        '<div class="avatar">' + categoryIcon(item.category) + '</div>' +
+        '<div class="avatar">' + categorySvg(item.category) + '</div>' +
         '<div class="main"><div class="title">' + esc(item.name) + '</div>' +
         '<div class="sub">' + badge + (schedule ? '<span class="badge repeat">按天</span>' : '') +
         ' ' + esc(headParts.join(' · ')) + '</div>' +
@@ -668,7 +714,7 @@
     const area = $('listArea');
     if (groups.length === 0) {
       area.innerHTML = emptyState(
-        '☕️', '还没有零星记账', '奶茶、打车这类不在预算里的开销，以及报销、卖闲置这类零星收入，都记在这里。',
+        'coffee', '还没有零星记账', '奶茶、打车这类不在预算里的开销，以及报销、卖闲置这类零星收入，都记在这里。',
         '记第一笔', 'add-entry'
       );
       return;
@@ -682,7 +728,7 @@
         if (income) subParts.push('收入');
         if (entry.note) subParts.push(entry.note);
         return '<div class="row tappable" data-edit-entry="' + entry.id + '">' +
-          '<div class="avatar ' + (income ? 'income' : '') + '">' + categoryIcon(entry.category) + '</div>' +
+          '<div class="avatar ' + (income ? 'income' : '') + '">' + categorySvg(entry.category) + '</div>' +
           '<div class="main"><div class="title">' + esc(entry.title) + '</div>' +
           '<div class="sub">' + esc(subParts.join(' · ')) + '</div></div>' +
           '<div class="amount ' + (income ? 'income' : 'spend') + '">' +
@@ -708,7 +754,7 @@
     const area = $('listArea');
     if (advances.length === 0) {
       area.innerHTML = emptyState(
-        '🧾', '还没有预支', '这个月提前买了下个月的东西（车票、学费、订阅）就记在这里：钱从本月出，下个月自动抵回来。',
+        'calendar', '还没有预支', '这个月提前买了下个月的东西（车票、学费、订阅）就记在这里：钱从本月出，下个月自动抵回来。',
         '添加预支', 'add-advance'
       );
       return;
@@ -729,7 +775,7 @@
         : '<span class="badge plan">待预留</span> ';
 
       return '<div class="row tappable" data-edit-advance="' + advance.id + '">' +
-        '<div class="avatar">🗓️</div>' +
+        '<div class="avatar">' + iconSvg('calendar') + '</div>' +
         '<div class="main"><div class="title">' + esc(advance.title) + '</div>' +
         '<div class="sub">' + statusBadge + esc(subParts.join(' · ')) + '</div></div>' +
         '<div class="row-actions">' +
@@ -751,7 +797,7 @@
         const explanation = isTargetMonth
           ? '这笔钱已带入本月实际剩余，本月不再作为未来预留扣除'
           : '这笔钱还在卡里（算在实际剩余里），但仍要从本月结余里留出';
-        return '<div class="row"><div class="avatar">⏳</div>' +
+        return '<div class="row"><div class="avatar">' + iconSvg('clock') + '</div>' +
           '<div class="main"><div class="title">上月（或更早）为「' + esc(advance.title) + '」预留</div>' +
           '<div class="sub">' + toDateInputValue(advance.date) + ' 扣款：' + explanation + '</div></div>' +
           '<div class="amount muted">' + Money.format(core.advanceOutstanding(advance)) + '</div></div>';
@@ -760,7 +806,7 @@
       '<div class="section-title"><span>预支（提前为后面月份花钱 / 预留）</span><span>' + esc(headerParts.join(' · ')) + '</span></div>' +
       carriedHTML +
       (s.advanceIncomingTotal > 0
-        ? '<div class="list" style="margin-bottom:12px"><div class="row"><div class="avatar">↩️</div>' +
+        ? '<div class="list" style="margin-bottom:12px"><div class="row"><div class="avatar">' + iconSvg('undo') + '</div>' +
           '<div class="main"><div class="title">上月已提前支付</div>' +
           '<div class="sub">' + s.advanceIncomingCount + ' 笔共 ' + Money.format(s.advanceIncomingTotal) +
           '：上个月已经替你付过了，这部分已加回本月可用额度；本月为它记的预算结算时会刚好抵消</div></div>' +
@@ -772,11 +818,13 @@
   // ---------------------------------------------------------------- 弹层
 
   function openSheet(html, state) {
+    if ($('sheet').classList.contains('hidden')) sheetReturnFocus = document.activeElement;
     sheetState = state || null;
     $('sheet').innerHTML = '<div class="sheet-grabber"></div>' + html;
     $('sheet').classList.remove('hidden');
     $('backdrop').classList.remove('hidden');
     lockBodyScroll();
+    window.requestAnimationFrame(function () { $('sheet').focus({ preventScroll: true }); });
   }
 
   function closeSheet() {
@@ -785,6 +833,8 @@
     $('backdrop').classList.add('hidden');
     $('sheet').innerHTML = '';
     unlockBodyScroll();
+    if (sheetReturnFocus && sheetReturnFocus.isConnected) sheetReturnFocus.focus({ preventScroll: true });
+    sheetReturnFocus = null;
   }
 
   // 弹层打开时锁住背后的页面，避免「滑动小页面却把主页面带着滚」
@@ -808,7 +858,7 @@
     return '<div class="chips" data-chip-group="' + name + '">' +
       Categories.map(function (category) {
         return '<button type="button" class="chip ' + (category.id === selected ? 'active' : '') +
-          '" data-chip-value="' + category.id + '">' + category.icon + ' ' + category.label + '</button>';
+          '" data-chip-value="' + category.id + '">' + categorySvg(category.id) + '<span>' + category.label + '</span></button>';
       }).join('') + '</div>';
   }
 
@@ -1087,9 +1137,9 @@
           '<input id="item-amount" type="text" inputmode="decimal" placeholder="0.00" value="' + esc(draft.amount) + '"></div></div>'
         : '<div class="field"><label>人数</label>' +
           '<div class="stepper">' +
-          '<button type="button" class="icon-btn" data-people="-1">−</button>' +
+          '<button type="button" class="icon-btn" data-people="-1" aria-label="减少人数">' + iconSvg('minus') + '</button>' +
           '<input id="item-people" type="number" min="1" max="20" value="' + draft.people + '">' +
-          '<button type="button" class="icon-btn" data-people="1">＋</button>' +
+          '<button type="button" class="icon-btn" data-people="1" aria-label="增加人数">' + iconSvg('plus') + '</button>' +
           '<span class="hint" style="margin:0 0 0 8px">人</span>' +
           '</div></div>' +
           '<div class="field"><label>每人每天的金额</label>' + personAmountFields(draft) +
@@ -1314,9 +1364,9 @@
       '<div class="hint">钱预计哪天从卡里扣（已经花了的话就是花钱那天）。</div></div>' +
       '<div class="field"><label>这笔钱算在哪个月</label>' +
       '<div class="stepper">' +
-      '<button type="button" class="icon-btn" data-target-step="-1">‹</button>' +
+      '<button type="button" class="icon-btn" data-target-step="-1" aria-label="上一个月">' + iconSvg('chevronLeft') + '</button>' +
       '<span class="target-month" id="advance-target-label">' + Month.label(target) + '</span>' +
-      '<button type="button" class="icon-btn" data-target-step="1">›</button>' +
+      '<button type="button" class="icon-btn" data-target-step="1" aria-label="下一个月">' + iconSvg('chevronRight') + '</button>' +
       '<span class="hint" style="margin:0 0 0 8px">默认下个月</span>' +
       '</div>' +
       '<div class="hint">到了这个月，App 会在那个月标注「上月已提前支付' +
@@ -1376,18 +1426,18 @@
       '" data-toggle="carry-over">' + (settings.carryOverEnabled ? '已开启' : '已关闭') + '</button></div>' +
       '<div class="hint">开启后，本月结余会自动加上上月剩余的钱。</div></div>' +
       '<div class="sheet-list">' +
-      '<div class="row tappable" data-action="copy-last-month"><div class="avatar">📋</div>' +
+      '<div class="row tappable" data-action="copy-last-month"><div class="avatar">' + iconSvg('copy') + '</div>' +
       '<div class="main"><div class="title">复制上月预算</div><div class="sub">把上月项目按计划金额带过来</div></div></div>' +
-      '<div class="row tappable" data-action="reconcile"><div class="avatar">⚖️</div>' +
+      '<div class="row tappable" data-action="reconcile"><div class="avatar">' + iconSvg('scale') + '</div>' +
       '<div class="main"><div class="title">余额对账</div><div class="sub">填现在的实际余额，差额自动校正结余</div></div></div>' +
-      '<div class="row tappable" data-action="export-json"><div class="avatar">💾</div>' +
+      '<div class="row tappable" data-action="export-json"><div class="avatar">' + iconSvg('save') + '</div>' +
       '<div class="main"><div class="title">导出备份（覆盖同一个文件）</div>' +
       '<div class="sub">固定文件名：手机提示「替换」、电脑直接覆盖，不会多出 (2)(3)</div></div></div>' +
-      '<div class="row tappable" data-action="export-json-dated"><div class="avatar">🗂️</div>' +
+      '<div class="row tappable" data-action="export-json-dated"><div class="avatar">' + iconSvg('archive') + '</div>' +
       '<div class="main"><div class="title">导出带日期的备份</div><div class="sub">需要留多个历史版本时用这个</div></div></div>' +
-      '<div class="row tappable" data-action="export-csv"><div class="avatar">📊</div>' +
+      '<div class="row tappable" data-action="export-csv"><div class="avatar">' + iconSvg('chart') + '</div>' +
       '<div class="main"><div class="title">导出表格（CSV）</div><div class="sub">用 Excel / Numbers 打开</div></div></div>' +
-      '<div class="row tappable" data-action="import-json"><div class="avatar">📥</div>' +
+      '<div class="row tappable" data-action="import-json"><div class="avatar">' + iconSvg('upload') + '</div>' +
       '<div class="main"><div class="title">导入备份</div><div class="sub">从 JSON 文件恢复数据</div></div></div>' +
       '</div>' +
       '<div class="sheet-actions">' +
@@ -1403,9 +1453,9 @@
     const html =
       '<h2>选择月份</h2>' +
       '<div class="year-switch">' +
-      '<button class="icon-btn" data-action="year-prev">‹</button>' +
+      '<button class="icon-btn" data-action="year-prev" aria-label="上一年">' + iconSvg('chevronLeft') + '</button>' +
       '<div class="year" id="pick-year">' + currentKey.year + '</div>' +
-      '<button class="icon-btn" data-action="year-next">›</button>' +
+      '<button class="icon-btn" data-action="year-next" aria-label="下一年">' + iconSvg('chevronRight') + '</button>' +
       '</div>' +
       '<div class="month-grid">' +
       Array.from({ length: 12 }, function (_, index) {
@@ -1582,6 +1632,9 @@
   $('monthLabel').addEventListener('click', openMonthPicker);
   $('openSettings').addEventListener('click', openSettingsSheet);
   $('backdrop').addEventListener('click', closeSheet);
+  document.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape' && !$('sheet').classList.contains('hidden')) closeSheet();
+  });
 
   $('hero').addEventListener('click', openIncomeSheet);
 
@@ -2167,11 +2220,13 @@
         Money.plain(store.summary(currentKey).advanceIncomingTotal));
       check('概览有「上月已提前支付」提示', $('statTiles').textContent.includes('上月已提前支付'));
       const nextMonthSummary = store.summary(currentKey);
-      check('下个月把这笔已付的钱加回可用额度（抵消本月的记账）',
+      check('下个月把已付预支和跨月预留现金都加回实际余额',
         Money.cents(nextMonthSummary.actualBalance) ===
-          Money.cents(nextMonthSummary.income + nextMonthSummary.carryOver + nextMonthSummary.advanceIncomingTotal),
+          Money.cents(nextMonthSummary.income + nextMonthSummary.carryOver +
+            nextMonthSummary.advanceIncomingTotal + nextMonthSummary.advanceCarriedTotal),
         Money.plain(nextMonthSummary.actualBalance) + ' vs ' +
-        Money.plain(nextMonthSummary.income + nextMonthSummary.carryOver + nextMonthSummary.advanceIncomingTotal));
+        Money.plain(nextMonthSummary.income + nextMonthSummary.carryOver +
+          nextMonthSummary.advanceIncomingTotal + nextMonthSummary.advanceCarriedTotal));
       click('prevMonth');
       check('回到 3 月', $('monthLabel').textContent === '2026年3月');
 
@@ -2216,11 +2271,14 @@
       store.setCarryOverEnabled(true);
       render();
 
+      const previousActualBalance = store.summary(currentKey).actualBalance;
       click('nextMonth');
       check('关闭弹层后背景解除锁定', !document.body.classList.contains('sheet-open'));
       check('切到 4 月', $('monthLabel').textContent === '2026年4月', $('monthLabel').textContent);
-      // 3 月：收入 8000 − 房租 2400 − 奶茶 18.5 − 预支的车票 700 = 4881.5
-      check('4 月自动结转 4881.5', store.summary(currentKey).carryOver === 4881.5, String(store.summary(currentKey).carryOver));
+      check('4 月自动结转使用 3 月结余（已扣未来预留）',
+        Money.cents(store.summary(currentKey).carryOver) ===
+          Money.cents(previousActualBalance - store.summary(currentKey).advanceCarriedTotal),
+        String(store.summary(currentKey).carryOver));
       click('monthLabel');
       check('月份选择器打开', !!$('pick-year'));
       $('sheet').querySelector('[data-month="3"]').click();

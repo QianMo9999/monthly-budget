@@ -21,7 +21,8 @@ function matchAll(text, regex, group) {
 }
 
 test('index.html 引用的静态资源都存在', () => {
-  const sources = matchAll(html, /(?:src|href)="([^"]+)"/g);
+  const sources = matchAll(html, /(?:src|href)="([^"]+)"/g)
+    .filter(source => !source.startsWith('#'));
   assert.ok(sources.length >= 3, '至少引用 css 和两个 js');
   sources.forEach(relative => {
     assert.ok(fs.existsSync(path.join(ROOT, relative)), '缺少文件：' + relative);

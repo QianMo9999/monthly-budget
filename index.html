@@ -3,7 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#2f6bff">
+  <meta name="theme-color" content="#f3f5f4" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#101412" media="(prefers-color-scheme: dark)">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="月账本">
@@ -15,22 +16,31 @@
   <link rel="stylesheet" href="src/styles.css">
 </head>
 <body>
+  <a class="skip-link" href="#mainContent">跳到主要内容</a>
   <header class="topbar">
-    <button id="prevMonth" class="icon-btn" type="button" aria-label="上个月">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    </button>
-    <button id="monthLabel" class="month-label" type="button">2026年1月</button>
-    <button id="nextMonth" class="icon-btn" type="button" aria-label="下个月">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    </button>
-    <span class="spacer"></span>
-    <button id="todayBtn" class="ghost-btn hidden" type="button">回到本月</button>
-    <button id="openSettings" class="icon-btn" type="button" aria-label="设置">
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <circle cx="12" cy="12" r="3.1" fill="none" stroke="currentColor" stroke-width="1.9"/>
-        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9v.09a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-    </button>
+    <div class="topbar-inner">
+      <div class="app-identity" aria-label="月账本">
+        <span class="app-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M6 3.5h12A2.5 2.5 0 0 1 20.5 6v12a2.5 2.5 0 0 1-2.5 2.5H6A2.5 2.5 0 0 1 3.5 18V6A2.5 2.5 0 0 1 6 3.5Z"/><path d="M8 8h8M8 12h5M8 16h3"/></svg>
+        </span>
+        <span><strong>月账本</strong><small>预算与现金流</small></span>
+      </div>
+      <div class="top-actions">
+        <button id="todayBtn" class="ghost-btn hidden" type="button">回到本月</button>
+        <button id="openSettings" class="icon-btn" type="button" aria-label="设置">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.05.05-2.83 2.83-.05-.05a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.04 1.57V21h-4v-.07a1.7 1.7 0 0 0-1.04-1.57 1.7 1.7 0 0 0-1.87.34l-.05.05-2.83-2.83.05-.05A1.7 1.7 0 0 0 4.6 15.04 1.7 1.7 0 0 0 3.07 14H3v-4h.07A1.7 1.7 0 0 0 4.6 8.96a1.7 1.7 0 0 0-.34-1.87l-.05-.05 2.83-2.83.05.05a1.7 1.7 0 0 0 1.87.34A1.7 1.7 0 0 0 10 3.07V3h4v.07a1.7 1.7 0 0 0 1.04 1.53 1.7 1.7 0 0 0 1.87-.34l.05-.05 2.83 2.83-.05.05a1.7 1.7 0 0 0-.34 1.87A1.7 1.7 0 0 0 20.93 10H21v4h-.07a1.7 1.7 0 0 0-1.53 1Z"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="month-switch" aria-label="月份切换">
+      <button id="prevMonth" class="icon-btn" type="button" aria-label="上个月">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+      </button>
+      <button id="monthLabel" class="month-label" type="button">2026年1月</button>
+      <button id="nextMonth" class="icon-btn" type="button" aria-label="下个月">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+      </button>
+    </div>
   </header>
 
   <div id="storageBanner" class="banner hidden"></div>
@@ -39,11 +49,14 @@
     <button id="backupNow" class="mini-btn" type="button">立即备份</button>
   </div>
 
-  <main>
+  <main id="mainContent">
     <section id="hero" class="hero">
       <div class="hero-top">
         <div id="heroLabel" class="hero-label">本月结余</div>
-        <div id="heroEdit" class="hero-edit">改收入 ✎</div>
+        <button id="heroEdit" class="hero-edit" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z"/></svg>
+          <span>收入与结转</span>
+        </button>
       </div>
       <div id="heroValue" class="hero-value">¥0.00</div>
       <div id="heroSub" class="hero-sub"></div>
@@ -64,20 +77,20 @@
 
     <section id="breakdownCard" class="card breakdown"></section>
 
-    <nav class="tabs">
-      <button id="tab-budget" class="tab active" type="button">预算<span class="tab-count"></span></button>
-      <button id="tab-ledger" class="tab" type="button">记账<span class="tab-count"></span></button>
-      <button id="tab-advance" class="tab" type="button">预支<span class="tab-count"></span></button>
+    <nav class="tabs" role="tablist" aria-label="账目类型">
+      <button id="tab-budget" class="tab active" type="button" role="tab" aria-selected="true">预算<span class="tab-count"></span></button>
+      <button id="tab-ledger" class="tab" type="button" role="tab" aria-selected="false">记账<span class="tab-count"></span></button>
+      <button id="tab-advance" class="tab" type="button" role="tab" aria-selected="false">预支<span class="tab-count"></span></button>
     </nav>
 
     <section id="listArea"></section>
   </main>
 
-  <button id="fab" class="fab" type="button">＋ 预算项目</button>
+  <button id="fab" class="fab" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>预算项目</span></button>
 
   <div id="backdrop" class="backdrop hidden"></div>
-  <section id="sheet" class="sheet hidden" role="dialog" aria-modal="true"></section>
-  <div id="toast" class="toast hidden" role="status"></div>
+  <section id="sheet" class="sheet hidden" role="dialog" aria-modal="true" aria-label="操作面板" tabindex="-1"></section>
+  <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
 
   <script src="src/core.js"></script>
   <script src="src/app.js"></script>
