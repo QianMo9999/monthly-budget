@@ -740,10 +740,13 @@
     const carriedHTML = (s.advanceCarriedReservations || []).length === 0 ? '' :
       '<div class="list" style="margin-bottom:12px">' +
       s.advanceCarriedReservations.map(function (advance) {
+        const isTargetMonth = Month.equals(core.advanceTargetKey(advance), currentKey);
+        const explanation = isTargetMonth
+          ? '这笔钱已带入本月实际剩余，本月不再作为未来预留扣除'
+          : '这笔钱还在卡里（算在实际剩余里），但仍要从本月结余里留出';
         return '<div class="row"><div class="avatar">⏳</div>' +
           '<div class="main"><div class="title">上月（或更早）为「' + esc(advance.title) + '」预留</div>' +
-          '<div class="sub">' + toDateInputValue(advance.date) + ' 才扣款：这笔钱还在卡里（算在实际剩余里），' +
-          '但它是留给那个月的，所以从本月结余里减掉</div></div>' +
+          '<div class="sub">' + toDateInputValue(advance.date) + ' 扣款：' + explanation + '</div></div>' +
           '<div class="amount muted">' + Money.format(core.advanceOutstanding(advance)) + '</div></div>';
       }).join('') + '</div>';
     area.innerHTML =

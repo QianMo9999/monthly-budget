@@ -14,7 +14,7 @@
   'use strict';
 
   /** App 版本号：改了功能就 +1，设置里能看到，用来确认线上是否已更新 */
-  const VERSION = 'v1.7.3';
+  const VERSION = 'v1.7.4';
 
   // ---------------------------------------------------------------- 金额
   // 内部一律按“分”做整数运算，避免 0.1 + 0.2 这类浮点误差。
@@ -678,7 +678,7 @@
    *   结余 = 实际剩余 − 预支待预留 − 当月未花预算
    *   超支 / 节省只做提示，不重复计入支出
    */
-  function summarize(month, carryOver, now, incomingAdvances, pendingReservations) {
+  function summarize(month, carryOver, now, incomingAdvances, pendingReservations, carriedAdvanceCash) {
     const reference = now || new Date();
     const items = month ? sortedItems(month) : [];
     const entries = month ? sortedEntries(month) : [];
@@ -720,8 +720,10 @@
     const reservedThisMonth = Money.sum(advances
       .filter(isReservedForLaterMonth)
       .map(advanceOutstanding));
-    const carriedReservations = Money.sum((pendingReservations || []).map(advanceOutstanding));
-    const advanceReservedTotal = Money.round(reservedThisMonth + carriedReservations);
+    const pendingReservationTotal = Money.sum((pendingReservations || []).map(advanceOutstanding));
+    const carriedCashAdvances = carriedAdvanceCash || pendingReservations || [];
+    const carriedCashTotal = Money.sum(carriedCashAdvances.map(advanceOutstanding));
+    const advanceReservedTotal = Money.round(reservedThisMonth + pendingReservationTotal);
     /*
      * 归属本月的预支（上个月替本月提前付掉的钱，只算已经真付出去的）。
      * 这笔钱要「加回」本月的可用额度：因为本月你可能还为它列了一条预算
@@ -767,8 +769,8 @@
       advanceReservedTotal: advanceReservedTotal,
       advanceReservedThisMonth: reservedThisMonth,
       /* 更早月份登记、至今还没到扣款日的预支（用于在归属月把它们列出来） */
-      advanceCarriedReservations: pendingReservations || [],
-      advanceCarriedTotal: Money.round(carriedReservations),
+      advanceCarriedReservations: carriedCashAdvances,
+      advanceCarriedTotal: Money.round(carriedCashTotal),
       advancePendingCount: advances.filter(function (advance) {
         return !advanceIsPaid(advance, reference);
       }).length,
@@ -805,7 +807,7 @@
       + summary.reconciliationAdjustment
     );
     summary.actualBalance = Money.round(
-      summary.balanceBeforeCarriedReservations + carriedReservations
+      summary.balanceBeforeCarriedReservations + carriedCashTotal
     );
     summary.bookBalance = Money.round(summary.actualBalance - summary.reconciliationAdjustment);
     /**
@@ -898,6 +900,23 @@
         month.advances.forEach(function (advance) {
           if (advanceIsPaid(advance, now)) return;
           if (Month.compare(advanceTargetKey(advance), key) > 0) result.push(advance);
+        });
+      });
+      return result;
+    }
+
+    /**
+     * 更早月份留下、至今仍未支付的跨月现金：目标月份也要继续单独带入。
+     * 到目标月时它不再是「未来预留」，但仍然是之前留给本月使用的现金。
+     */
+    function carriedAdvanceCashFor(key, now) {
+      const result = [];
+      state.months.forEach(function (month) {
+        const monthKey = { year: month.year, month: month.month };
+        if (Month.compare(monthKey, key) >= 0) return;
+        month.advances.forEach(function (advance) {
+          if (advanceIsPaid(advance, now)) return;
+          if (Month.compare(advanceTargetKey(advance), key) >= 0) result.push(advance);
         });
       });
       return result;
@@ -1012,19 +1031,21 @@
         const previous = Month.prev(key);
         if (!findMonth(previous)) return 0;
         const previousPending = pendingReservationsFor(previous, now);
+        const previousCarriedCash = carriedAdvanceCashFor(previous, now);
         const previousBalance = summarize(
           findMonth(previous),
           store.carryOver(previous, seen.concat([key]), now),
           now,
           incomingAdvancesFor(previous),
-          previousPending
+          previousPending,
+          previousCarriedCash
         ).actualBalance;
         /*
          * 仍在预留中的跨月现金由 summary 单独带入，不能再混进普通结转。
          * 到目标月份后它不再预留，会自然回到普通结转中。
          */
         const carriedSeparately = Money.sum(
-          pendingReservationsFor(key, now).map(advanceOutstanding)
+          carriedAdvanceCashFor(key, now).map(advanceOutstanding)
         );
         return Money.round(previousBalance - carriedSeparately);
       },
@@ -1033,10 +1054,11 @@
         const month = findMonth(key);
         const incoming = incomingAdvancesFor(key);
         const pending = pendingReservationsFor(key, now);
+        const carriedCash = carriedAdvanceCashFor(key, now);
         if (!month) {
-          return summarize(null, 0, now, incoming, pending);
+          return summarize(null, 0, now, incoming, pending, carriedCash);
         }
-        return summarize(month, store.carryOver(key, [], now), now, incoming, pending);
+        return summarize(month, store.carryOver(key, [], now), now, incoming, pending, carriedCash);
       },
 
       recentSummaries(count, endingAt, now) {

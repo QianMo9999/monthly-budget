@@ -952,9 +952,18 @@ test('预支：预留会一直保留到扣款日（10 月结余减掉，但实�
   assert.equal(october.plannedBalance, 15500, '所以 10 月的结余要减掉这 500');
 
   const november = store.summary(NOV, now);
+  assert.equal(november.carryOver, 15500, '普通结转不含单独带入11月的500');
+  assert.equal(november.advanceCarriedTotal, 500, '目标月份仍要收到之前预留的现金');
   assert.equal(november.actualBalance, 24000, '钱一直在卡里，11 月当然包含它');
   assert.equal(november.advanceReservedTotal, 0, '到了目标月就不再预留扣结余了');
   assert.equal(november.plannedBalance, 24000, '11 月的结余不再减这 500');
+
+  store.setCarryOverOverride(0, NOV);
+  const novemberWithZeroOverride = store.summary(NOV, now);
+  assert.equal(novemberWithZeroOverride.actualBalance, 8500, '手动结转为0时，11月收入8000仍要加预留现金500');
+  assert.equal(novemberWithZeroOverride.advanceCarriedTotal, 500);
+  assert.equal(novemberWithZeroOverride.advanceReservedTotal, 0);
+  store.setCarryOverOverride(null, NOV);
 
   // 扣款日到了之后：钱真的出去，实际剩余减少，预留解除；全程只扣这一次
   const later = new Date(2026, 10, 5, 12);           // 11 月 5 日
@@ -1071,6 +1080,8 @@ test('预支：明确选「还没花」时，即使扣款日是今天也只预�
   assert.equal(october.plannedBalance, 15500, '10 月结余也减掉 500');
 
   const november = store.summary(NOV, now);
+  assert.equal(november.advanceCarriedTotal, 500, '目标月份仍然单独带入这500');
+  assert.equal(november.advanceReservedTotal, 0, '目标月份不再把它当作未来预留');
   assert.equal(november.actualBalance, 24000, '11 月就是给它预留的月份，钱直接算在实际剩余里');
   assert.equal(november.plannedBalance, 24000, '11 月不再预扣');
 
