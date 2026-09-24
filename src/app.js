@@ -64,7 +64,6 @@ defineMorphIcon();
   let sheetReturnFocus = null;
   let sheetEngine = null;
   let sheetPresentation = null;
-  let breakdownContentAnimation = null;
   let renderedActiveTab = null;
   let tabIndicatorAnimation = null;
   let fabGlassFrame = 0;
@@ -495,63 +494,18 @@ defineMorphIcon();
       : 'M5.5 7.5 10 12l4.5-4.5';
     if (morph) morph.icon = morphPath;
     const content = card.querySelector('.breakdown-content');
-    const nextMode = breakdownExpanded ? 'expanded' : 'collapsed';
-    const nextHTML = breakdownExpanded
-      ? '<div class="breakdown-body">' + rows.join('') + '</div>'
-      : '<div class="breakdown-summary">' +
-        '<div><span>实际剩余</span><strong>' + Money.format(s.actualBalance) + '</strong></div>' +
-        '<i></i>' +
-        '<div><span>可用结余</span><strong>' + Money.format(s.plannedBalance) + '</strong></div>' +
-        '</div>';
-
-    const previousMode = content.dataset.mode;
-    const shouldAnimate = typeof content.animate === 'function' &&
-      previousMode && previousMode !== nextMode &&
-      !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (!shouldAnimate) {
-      if (breakdownContentAnimation) breakdownContentAnimation.cancel();
-      breakdownContentAnimation = null;
-      content.classList.remove('is-animating');
-      content.style.height = '';
-      content.innerHTML = nextHTML;
-      content.dataset.mode = nextMode;
-      return;
+    if (!content.querySelector('.breakdown-summary')) {
+      content.innerHTML =
+        '<div class="breakdown-summary"></div>' +
+        '<div class="breakdown-details"><div class="breakdown-details-inner">' +
+        '<div class="breakdown-body"></div></div></div>';
     }
-
-    const fromHeight = content.getBoundingClientRect().height;
-    if (breakdownContentAnimation) breakdownContentAnimation.cancel();
-    content.style.height = 'auto';
-    content.innerHTML = nextHTML;
-    content.dataset.mode = nextMode;
-    const toHeight = content.getBoundingClientRect().height;
-    content.style.height = fromHeight + 'px';
-    content.classList.add('is-animating');
-    void content.offsetHeight;
-
-    const animation = content.animate([
-      { height: fromHeight + 'px' },
-      { height: toHeight + 'px' }
-    ], {
-      duration: 380,
-      easing: 'cubic-bezier(.2,.9,.22,1)'
-    });
-    breakdownContentAnimation = animation;
-    const child = content.firstElementChild;
-    if (child) {
-      child.animate([
-        { opacity: 0.35, transform: 'translateY(-4px)' },
-        { opacity: 1, transform: 'translateY(0)' }
-      ], {
-        duration: 300,
-        easing: 'cubic-bezier(.2,.9,.22,1)'
-      });
-    }
-    animation.addEventListener('finish', function () {
-      if (breakdownContentAnimation !== animation) return;
-      breakdownContentAnimation = null;
-      content.classList.remove('is-animating');
-      content.style.height = '';
-    }, { once: true });
+    content.querySelector('.breakdown-summary').innerHTML =
+      '<div><span>实际剩余</span><strong>' + Money.format(s.actualBalance) + '</strong></div>' +
+      '<i></i>' +
+      '<div><span>可用结余</span><strong>' + Money.format(s.plannedBalance) + '</strong></div>';
+    content.querySelector('.breakdown-body').innerHTML = rows.join('');
+    content.querySelector('.breakdown-details').setAttribute('aria-hidden', breakdownExpanded ? 'false' : 'true');
   }
 
   /** 备份提醒：手机上的浏览器存储有可能被系统清掉，定期导出一次最保险。 */
