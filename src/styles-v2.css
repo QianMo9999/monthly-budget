@@ -1,9 +1,3 @@
-@property --hero-border-angle {
-  syntax: "<angle>";
-  inherits: false;
-  initial-value: 0deg;
-}
-
 :root {
   color-scheme: light;
   --bg: #eef1f4;
@@ -25,7 +19,7 @@
   --hero-text: #171a1f;
   --hero-muted: #68717c;
   --hero-good: #087f5b;
-  --income-gradient: linear-gradient(105deg, #087f5b 4%, #11a77a 42%, #2f7de1 96%);
+  --income-gradient: linear-gradient(100deg, #008f5d 0%, #00b98e 34%, #168fda 67%, #315fe4 100%);
   --good: #087f5b;
   --good-soft: #e5f7ef;
   --bad: #c2414f;
@@ -53,7 +47,7 @@
   --page-top: #fafbfc;
   --hero-card-fill: linear-gradient(145deg, rgba(255, 255, 255, 0.99), rgba(249, 250, 252, 0.99) 54%, rgba(240, 243, 246, 0.99));
   --hero-ring: conic-gradient(
-    from var(--hero-border-angle),
+    from 0deg,
     rgba(230, 91, 12, 0.18) 0deg,
     rgba(245, 112, 28, 0.34) 30deg,
     rgba(255, 149, 78, 0.96) 52deg,
@@ -110,7 +104,7 @@
   --hero-text: #f8fafc;
   --hero-muted: #b5b7bb;
   --hero-good: #72e0b4;
-  --income-gradient: linear-gradient(105deg, #72e0b4 4%, #47d5ad 42%, #76a8ff 96%);
+  --income-gradient: linear-gradient(100deg, #72e0b4 0%, #35d8b0 34%, #62b0ff 67%, #8c9cff 100%);
   --good: #71d5ac;
   --good-soft: #17372f;
   --bad: #f28b96;
@@ -384,7 +378,6 @@ textarea:focus-visible,
 main { width: min(100%, 880px); margin-inline: auto; padding: 0 16px 32px; }
 
 .hero {
-  --hero-border-angle: 0deg;
   position: relative;
   margin-top: 16px;
   padding: 24px;
@@ -392,11 +385,39 @@ main { width: min(100%, 880px); margin-inline: auto; padding: 0 16px 32px; }
   border: 1.5px solid transparent;
   border-radius: 18px;
   color: var(--hero-text);
-  background:
-    var(--hero-card-fill) padding-box,
-    var(--hero-ring) border-box;
+  background: var(--hero-card-fill);
   box-shadow: var(--hero-card-shadow);
   cursor: pointer;
+}
+
+.hero-ring {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.hero-ring::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  inset: -120%;
+  background: var(--hero-ring);
+  transform: rotate(0deg);
+  transform-origin: center;
+  will-change: transform;
+}
+
+.hero-ring::after {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  inset: 1.5px;
+  border-radius: calc(18px - 1.5px);
+  background: var(--hero-card-fill);
+  box-shadow: inset 0 0 18px color-mix(in srgb, var(--hero-inner-line) 32%, transparent);
 }
 
 .hero::before {
@@ -423,7 +444,7 @@ main { width: min(100%, 880px); margin-inline: auto; padding: 0 16px 32px; }
   pointer-events: none;
 }
 
-.hero > * { position: relative; z-index: 3; }
+.hero > :not(.hero-ring) { position: relative; z-index: 3; }
 
 .hero-top { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .hero-label { color: var(--hero-muted); font-size: 13px; font-weight: 650; }
@@ -465,6 +486,7 @@ main { width: min(100%, 880px); margin-inline: auto; padding: 0 16px 32px; }
 .row .amount.income {
   color: var(--hero-good);
   background-image: var(--income-gradient);
+  background-size: 100% 100%;
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -897,25 +919,6 @@ span[data-count-key] { display: inline-block; }
 
 .backdrop:not(.hidden) { opacity: 1; pointer-events: auto; }
 
-.bs-root::after {
-  content: "";
-  position: fixed;
-  z-index: 99;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  height: 100dvh;
-  pointer-events: none;
-  background: var(--surface);
-  transform: translate3d(
-    0,
-    clamp(0px, calc(100dvh - var(--bs-size, 0px)), 100dvh),
-    0
-  );
-  will-change: transform;
-  contain: strict;
-}
-
 .sheet {
   --sheet-fill: var(--surface);
   position: fixed;
@@ -1290,7 +1293,6 @@ span[data-count-key] { display: inline-block; }
     backdrop-filter: none;
   }
 
-  .bs-root::after { background: var(--surface); }
 }
 
 @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
@@ -1303,19 +1305,20 @@ span[data-count-key] { display: inline-block; }
   .fab::before,
   .fab::after { display: none; }
   .hero { background: var(--hero); border-color: rgba(238, 104, 25, 0.82); -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .hero-ring { display: none; }
   .hero::after { display: none; }
 }
 
 @media (prefers-reduced-motion: no-preference) {
   main > .hero {
-    animation:
-      hero-enter 460ms cubic-bezier(0.22, 1, 0.36, 1) both,
-      hero-border-flow 6.8s 460ms linear infinite;
+    animation: hero-enter 460ms cubic-bezier(0.22, 1, 0.36, 1) both;
   }
+  .hero-ring::before { animation: hero-ring-spin 6.8s linear infinite; }
   main > .tiles { animation: overview-enter 520ms 70ms cubic-bezier(0.22, 1, 0.36, 1) both; }
   .hero::after { animation: hero-breathe 6.4s ease-in-out infinite; }
   .hero:focus-visible,
-  .hero:focus-visible::after { animation-play-state: paused; }
+  .hero:focus-visible::after,
+  .hero:focus-visible .hero-ring::before { animation-play-state: paused; }
   button.spring-release { animation: button-spring 360ms cubic-bezier(0.2, 0.9, 0.25, 1.2); }
   .number-ticking { animation: number-settle 520ms cubic-bezier(0.2, 0.82, 0.22, 1); }
   #listArea .number-ticking { animation: number-list-settle 420ms ease-out; }
@@ -1331,8 +1334,8 @@ span[data-count-key] { display: inline-block; }
     to { opacity: 1; transform: translateY(0); }
   }
 
-  @keyframes hero-border-flow {
-    to { --hero-border-angle: 360deg; }
+  @keyframes hero-ring-spin {
+    to { transform: rotate(360deg); }
   }
 
   @keyframes hero-breathe {

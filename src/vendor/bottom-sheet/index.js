@@ -2030,7 +2030,9 @@ var GestureController = class {
         const rubberOn = ctx.rubberBandEnabled;
         let next = this.dragStartSize + delta;
         if (next > max) {
-          next = rubberOn ? max + rubberBand(next - max, maxAxis) : max;
+          // Keep the full-height edge pinned to the viewport. A fast upward flick
+          // otherwise exposes the page below the sheet for one composited frame.
+          next = max;
         } else if (next < min) {
           next = rubberOn ? min - rubberBand(min - next, maxAxis) : min;
         }
@@ -3682,10 +3684,9 @@ var BottomSheetCore = class {
     }
     const settleCap = this.snaps.getMaxAxisSize();
     const settleSize = settleCap > 0 ? Math.min(target.size, settleCap) : target.size;
-    this.allowOvershoot = true;
+    this.allowOvershoot = false;
     void this.animation.animateTo(settleSize, velocity).then(() => {
       if (signal.aborted) return;
-      this.allowOvershoot = false;
       this.opening = false;
       this.completeSnap(
         target.id,
