@@ -25,6 +25,7 @@
   --hero-text: #171a1f;
   --hero-muted: #68717c;
   --hero-good: #087f5b;
+  --income-gradient: linear-gradient(105deg, #087f5b 4%, #11a77a 42%, #2f7de1 96%);
   --good: #087f5b;
   --good-soft: #e5f7ef;
   --bad: #c2414f;
@@ -53,17 +54,18 @@
   --hero-card-fill: linear-gradient(145deg, rgba(255, 255, 255, 0.99), rgba(249, 250, 252, 0.99) 54%, rgba(240, 243, 246, 0.99));
   --hero-ring: conic-gradient(
     from var(--hero-border-angle),
-    rgba(238, 104, 25, 0.22) 0deg,
-    rgba(245, 116, 35, 0.36) 26deg,
-    rgba(250, 124, 42, 0.9) 48deg,
-    rgba(255, 211, 177, 1) 68deg,
-    rgba(246, 111, 27, 0.94) 88deg,
-    rgba(234, 93, 13, 0.2) 118deg,
-    rgba(235, 119, 48, 0.08) 238deg,
-    rgba(247, 128, 49, 0.52) 286deg,
-    rgba(255, 180, 126, 0.86) 310deg,
-    rgba(238, 104, 25, 0.22) 340deg,
-    rgba(238, 104, 25, 0.22) 360deg
+    rgba(230, 91, 12, 0.18) 0deg,
+    rgba(245, 112, 28, 0.34) 30deg,
+    rgba(255, 149, 78, 0.96) 52deg,
+    rgba(255, 244, 228, 1) 65deg,
+    rgba(255, 177, 116, 0.98) 78deg,
+    rgba(225, 83, 8, 0.2) 112deg,
+    rgba(235, 119, 48, 0.07) 232deg,
+    rgba(244, 105, 24, 0.3) 280deg,
+    rgba(255, 218, 188, 1) 302deg,
+    rgba(244, 105, 24, 0.68) 320deg,
+    rgba(230, 91, 12, 0.18) 346deg,
+    rgba(230, 91, 12, 0.18) 360deg
   );
   --hero-inner-line: rgba(255, 255, 255, 0.84);
   --hero-sheen: linear-gradient(132deg, rgba(255, 255, 255, 0.72), transparent 32%, rgba(246, 120, 40, 0.025) 64%, rgba(255, 255, 255, 0.22));
@@ -108,6 +110,7 @@
   --hero-text: #f8fafc;
   --hero-muted: #b5b7bb;
   --hero-good: #72e0b4;
+  --income-gradient: linear-gradient(105deg, #72e0b4 4%, #47d5ad 42%, #76a8ff 96%);
   --good: #71d5ac;
   --good-soft: #17372f;
   --bad: #f28b96;
@@ -340,9 +343,11 @@ textarea:focus-visible,
   border-radius: 8px;
   color: var(--text);
   background: transparent;
-  font-size: 19px;
+  font-size: 17px;
   font-weight: 760;
   font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+  white-space: nowrap;
 }
 
 .ghost-btn {
@@ -456,7 +461,14 @@ main { width: min(100%, 880px); margin-inline: auto; padding: 0 16px 32px; }
   overflow-wrap: anywhere;
 }
 
-.hero-sub span:first-child strong { color: var(--hero-good); }
+.hero-sub span:first-child strong,
+.row .amount.income {
+  color: var(--hero-good);
+  background-image: var(--income-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
 
 .tiles {
   display: grid;
@@ -767,17 +779,26 @@ span[data-count-key] { display: inline-block; }
 .mini-btn.warn { color: var(--warn); background: var(--warn-soft); border-color: transparent; }
 
 .row .mini-btn {
-  border-color: var(--row-action-line);
-  color: var(--row-action-text);
-  background: var(--row-action-surface);
-  box-shadow: var(--row-action-shadow);
+  min-height: 44px;
+  padding-inline: 12px;
+  border-color: color-mix(in srgb, var(--accent) 22%, var(--line));
+  border-radius: 11px;
+  color: var(--accent-strong);
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--surface) 96%, var(--accent-soft)), color-mix(in srgb, var(--surface-subtle) 88%, var(--accent-soft))) padding-box;
+  box-shadow:
+    0 5px 12px color-mix(in srgb, var(--accent) 10%, transparent),
+    inset 0 1px 0 color-mix(in srgb, white 84%, transparent);
 }
 
 .row .mini-btn:active,
 .row .mini-btn.keyboard-pressed {
-  border-color: color-mix(in srgb, var(--row-action-line) 75%, var(--row-action-text));
-  background: var(--row-action-pressed);
+  border-color: color-mix(in srgb, var(--accent) 36%, var(--line));
+  background: color-mix(in srgb, var(--accent-soft) 72%, var(--surface));
+  box-shadow: inset 0 2px 7px color-mix(in srgb, var(--accent) 16%, transparent) !important;
 }
+
+#listArea { display: flow-root; }
 
 .day-header { padding: 15px 4px 6px; display: flex; justify-content: space-between; gap: 12px; color: var(--muted); font-size: 11px; }
 
@@ -883,12 +904,12 @@ span[data-count-key] { display: inline-block; }
   right: 0;
   bottom: 0;
   left: 0;
-  height: 160px;
+  height: 100dvh;
   pointer-events: none;
   background: var(--surface);
   transform: translate3d(
     0,
-    clamp(0px, calc(160px - var(--bs-size, 0px)), 160px),
+    clamp(0px, calc(100dvh - var(--bs-size, 0px)), 100dvh),
     0
   );
   will-change: transform;
@@ -1289,7 +1310,7 @@ span[data-count-key] { display: inline-block; }
   main > .hero {
     animation:
       hero-enter 460ms cubic-bezier(0.22, 1, 0.36, 1) both,
-      hero-border-flow 9s 460ms linear infinite;
+      hero-border-flow 6.8s 460ms linear infinite;
   }
   main > .tiles { animation: overview-enter 520ms 70ms cubic-bezier(0.22, 1, 0.36, 1) both; }
   .hero::after { animation: hero-breathe 6.4s ease-in-out infinite; }
@@ -1297,6 +1318,7 @@ span[data-count-key] { display: inline-block; }
   .hero:focus-visible::after { animation-play-state: paused; }
   button.spring-release { animation: button-spring 360ms cubic-bezier(0.2, 0.9, 0.25, 1.2); }
   .number-ticking { animation: number-settle 520ms cubic-bezier(0.2, 0.82, 0.22, 1); }
+  #listArea .number-ticking { animation: number-list-settle 420ms ease-out; }
   .toast:not(.hidden) { animation: toast-enter 220ms cubic-bezier(0.22, 1, 0.36, 1) both; }
 
   @keyframes hero-enter {
@@ -1328,6 +1350,11 @@ span[data-count-key] { display: inline-block; }
     0% { opacity: 0.72; transform: translateY(2px); }
     62% { opacity: 1; transform: translateY(-1px); }
     100% { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes number-list-settle {
+    from { opacity: 0.72; }
+    to { opacity: 1; }
   }
 
   @keyframes toast-enter {
