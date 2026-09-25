@@ -47,19 +47,21 @@
   --page-top: #fafbfc;
   --hero-card-fill: linear-gradient(145deg, rgba(255, 255, 255, 0.99), rgba(249, 250, 252, 0.99) 54%, rgba(240, 243, 246, 0.99));
   --hero-ring: conic-gradient(
-    from 14deg,
-    rgba(213, 72, 4, 0.34) 0deg,
-    rgba(236, 91, 10, 0.4) 54deg,
-    rgba(255, 134, 55, 0.72) 92deg,
-    rgba(255, 190, 137, 0.98) 116deg,
-    rgba(255, 247, 233, 1) 128deg,
-    rgba(255, 166, 97, 0.94) 142deg,
-    rgba(235, 88, 7, 0.46) 174deg,
-    rgba(209, 70, 3, 0.3) 238deg,
-    rgba(242, 109, 25, 0.42) 284deg,
-    rgba(255, 175, 111, 0.72) 314deg,
-    rgba(228, 82, 8, 0.38) 340deg,
-    rgba(213, 72, 4, 0.34) 360deg
+    from 10deg,
+    rgba(226, 91, 20, 0.32) 0deg,
+    rgba(255, 183, 132, 0.66) 28deg,
+    rgba(255, 234, 218, 0.92) 50deg,
+    rgba(255, 255, 255, 1) 72deg,
+    rgba(255, 248, 242, 1) 100deg,
+    rgba(255, 175, 116, 0.7) 128deg,
+    rgba(236, 92, 17, 0.44) 154deg,
+    rgba(255, 205, 168, 0.7) 184deg,
+    rgba(255, 245, 237, 0.98) 210deg,
+    rgba(255, 255, 255, 1) 242deg,
+    rgba(255, 238, 225, 0.94) 272deg,
+    rgba(255, 169, 108, 0.62) 306deg,
+    rgba(232, 91, 19, 0.36) 336deg,
+    rgba(226, 91, 20, 0.32) 360deg
   );
   --hero-inner-line: rgba(255, 255, 255, 0.84);
   --hero-sheen: linear-gradient(132deg, rgba(255, 255, 255, 0.72), transparent 32%, rgba(246, 120, 40, 0.025) 64%, rgba(255, 255, 255, 0.22));
