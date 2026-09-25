@@ -45,30 +45,69 @@
   --chrome-control-line: rgba(255, 255, 255, 0.9);
   --chrome-control-shadow: 0 7px 18px rgba(35, 50, 68, 0.13), inset 0 1px 0 rgba(255, 255, 255, 0.96);
   --page-top: #fafbfc;
-  --hero-card-fill: linear-gradient(145deg, rgba(255, 255, 255, 0.99), rgba(249, 250, 252, 0.99) 54%, rgba(240, 243, 246, 0.99));
+  --hero-card-fill: linear-gradient(145deg, rgba(255, 253, 250, 0.99), rgba(251, 251, 252, 0.99) 52%, rgba(241, 244, 247, 0.99));
   --hero-ring: conic-gradient(
     from 0deg,
-    rgba(226, 92, 24, 0.14) 0deg,
-    rgba(244, 116, 52, 0.28) 30deg,
-    rgba(255, 157, 96, 0.72) 48deg,
-    rgba(255, 218, 187, 0.96) 58deg,
-    rgba(255, 255, 255, 1) 66deg,
-    rgba(255, 224, 202, 0.98) 74deg,
-    rgba(255, 164, 104, 0.7) 86deg,
-    rgba(236, 101, 31, 0.22) 112deg,
-    rgba(226, 116, 66, 0.08) 232deg,
-    rgba(244, 130, 73, 0.24) 278deg,
-    rgba(255, 191, 148, 0.68) 292deg,
-    rgba(255, 255, 255, 1) 304deg,
-    rgba(255, 210, 177, 0.84) 314deg,
-    rgba(244, 122, 62, 0.46) 326deg,
-    rgba(226, 92, 24, 0.14) 348deg,
-    rgba(226, 92, 24, 0.14) 360deg
+    /* dark 模式是「橙底 + 白核」，白卡上白核会变成断口，所以这里反过来：淡底 + 橙核，核心里再留一点点过曝的暖白 */
+    rgba(250, 222, 202, 0.22) 0deg,
+    rgba(255, 202, 160, 0.34) 26deg,
+    rgba(255, 180, 110, 0.58) 45deg,
+    rgba(255, 160, 66, 0.86) 57deg,
+    rgba(255, 152, 42, 0.98) 65deg,
+    rgba(255, 238, 218, 0.60) 68deg,
+    rgba(255, 156, 46, 0.96) 71deg,
+    rgba(255, 166, 70, 0.84) 79deg,
+    rgba(255, 182, 120, 0.56) 94deg,
+    rgba(254, 202, 166, 0.32) 116deg,
+    rgba(250, 222, 204, 0.22) 150deg,
+    rgba(246, 226, 218, 0.20) 186deg,
+    rgba(244, 228, 224, 0.19) 216deg,
+    rgba(248, 220, 206, 0.22) 250deg,
+    rgba(255, 202, 158, 0.40) 274deg,
+    rgba(255, 174, 96, 0.68) 290deg,
+    rgba(255, 155, 50, 0.98) 299deg,
+    rgba(255, 240, 222, 0.60) 302deg,
+    rgba(255, 158, 54, 0.95) 305deg,
+    rgba(255, 174, 94, 0.78) 314deg,
+    rgba(255, 190, 136, 0.50) 328deg,
+    rgba(252, 212, 180, 0.30) 344deg,
+    rgba(250, 222, 202, 0.22) 360deg
   );
-  --hero-inner-line: rgba(255, 255, 255, 0.84);
+  /* 灯带外溢的光：角度和灯带一致，所以亮的地方才会亮起来 */
+  --hero-halo: conic-gradient(
+    from 0deg,
+    rgba(255, 180, 140, 0.06) 0deg,
+    rgba(255, 160, 100, 0.15) 26deg,
+    rgba(255, 150, 64, 0.40) 45deg,
+    rgba(255, 146, 44, 0.56) 57deg,
+    rgba(255, 146, 38, 0.66) 68deg,
+    rgba(255, 152, 50, 0.52) 79deg,
+    rgba(255, 166, 90, 0.32) 94deg,
+    rgba(255, 184, 134, 0.13) 116deg,
+    rgba(255, 196, 160, 0.05) 150deg,
+    rgba(255, 202, 176, 0.03) 186deg,
+    rgba(255, 204, 180, 0.025) 216deg,
+    rgba(255, 198, 168, 0.045) 250deg,
+    rgba(255, 180, 122, 0.15) 274deg,
+    rgba(255, 158, 72, 0.42) 290deg,
+    rgba(255, 146, 40, 0.66) 302deg,
+    rgba(255, 154, 54, 0.50) 314deg,
+    rgba(255, 168, 96, 0.30) 328deg,
+    rgba(255, 184, 136, 0.13) 344deg,
+    rgba(255, 180, 140, 0.06) 360deg
+  );
+  --hero-halo-blur: 8px;
+  --hero-halo-saturate: 132%;
+  --hero-halo-opacity: 0.98;
+  --hero-inner-line: rgba(255, 244, 236, 0.9);
   --hero-sheen: linear-gradient(132deg, rgba(255, 255, 255, 0.72), transparent 32%, rgba(246, 120, 40, 0.025) 64%, rgba(255, 255, 255, 0.22));
-  --hero-glow: radial-gradient(ellipse at 50% 48%, rgba(247, 123, 43, 0.22) 0%, rgba(255, 175, 117, 0.13) 38%, rgba(99, 143, 202, 0.06) 58%, transparent 76%);
-  --hero-card-shadow: inset 0 1px 0 rgba(255, 255, 255, 1), inset 0 -28px 52px rgba(230, 108, 33, 0.035), inset 0 0 30px rgba(85, 150, 242, 0.025), 0 20px 46px rgba(38, 57, 79, 0.14);
+  --hero-glow: radial-gradient(ellipse at 50% 46%, rgba(255, 168, 112, 0.14) 0%, rgba(255, 176, 130, 0.085) 46%, rgba(255, 190, 150, 0.038) 72%, transparent 90%);
+  --hero-glow-inset: -6px;
+  --hero-glow-radius: 24px;
+  --hero-glow-blur: 8px;
+  --hero-glow-saturate: 125%;
+  --hero-glow-opacity: 0.34;
+  --hero-card-shadow: inset 0 1px 0 rgba(255, 255, 255, 1), inset 0 -28px 52px rgba(230, 108, 33, 0.03), inset 0 0 26px rgba(255, 168, 120, 0.05), 0 18px 42px rgba(38, 57, 79, 0.13);
   --panel-edge: linear-gradient(135deg, rgba(250, 130, 57, 0.44), rgba(255, 255, 255, 0.92) 48%, rgba(231, 95, 19, 0.28));
   --avatar-surface: linear-gradient(145deg, #fff9f4, #eef1f4);
   --avatar-text: #c95712;
@@ -150,9 +189,32 @@
     rgba(230, 91, 12, 0.18) 346deg,
     rgba(230, 91, 12, 0.18) 360deg
   );
+  --hero-halo: conic-gradient(
+    from 0deg,
+    rgba(232, 96, 16, 0.12) 0deg,
+    rgba(246, 114, 30, 0.2) 30deg,
+    rgba(255, 149, 78, 0.46) 52deg,
+    rgba(255, 230, 196, 0.52) 65deg,
+    rgba(255, 177, 116, 0.46) 78deg,
+    rgba(228, 86, 10, 0.14) 112deg,
+    rgba(236, 120, 48, 0.05) 232deg,
+    rgba(244, 105, 24, 0.18) 280deg,
+    rgba(255, 216, 184, 0.52) 302deg,
+    rgba(244, 105, 24, 0.4) 320deg,
+    rgba(232, 96, 16, 0.12) 346deg,
+    rgba(232, 96, 16, 0.12) 360deg
+  );
+  --hero-halo-blur: 8px;
+  --hero-halo-saturate: 122%;
+  --hero-halo-opacity: 0.85;
   --hero-inner-line: rgba(255, 255, 255, 0.08);
   --hero-sheen: linear-gradient(132deg, rgba(255, 255, 255, 0.09), transparent 30%, rgba(246, 120, 40, 0.025) 62%, rgba(255, 255, 255, 0.04));
   --hero-glow: radial-gradient(ellipse at 50% 48%, rgba(247, 123, 43, 0.28) 0%, rgba(151, 91, 54, 0.14) 38%, rgba(75, 107, 151, 0.07) 58%, transparent 76%);
+  --hero-glow-inset: -18% -8% -28%;
+  --hero-glow-radius: 28px;
+  --hero-glow-blur: 34px;
+  --hero-glow-saturate: 115%;
+  --hero-glow-opacity: 0.72;
   --hero-card-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), inset 0 -32px 54px rgba(0, 0, 0, 0.28), inset 0 0 34px rgba(246, 120, 40, 0.035), 0 20px 48px rgba(0, 0, 0, 0.3);
   --panel-edge: linear-gradient(135deg, rgba(246, 128, 56, 0.5), rgba(255, 255, 255, 0.07) 48%, rgba(207, 78, 15, 0.38));
   --avatar-surface: linear-gradient(145deg, #46352c, #231f1d);
@@ -411,7 +473,8 @@ main { width: min(100%, 880px); margin-inline: auto; padding: 0 16px 32px; }
   cursor: pointer;
 }
 
-.hero-ring {
+.hero-ring,
+.hero-bloom {
   display: none;
 }
 
@@ -419,6 +482,38 @@ main { width: min(100%, 880px); margin-inline: auto; padding: 0 16px 32px; }
 
 @supports ((-webkit-mask-composite: xor) or (mask-composite: exclude)) {
   .hero {
+    background: var(--hero-card-fill);
+  }
+
+  /* 灯带往外洒的光：跟着灯带一起转，亮的那一段才亮 */
+  .hero-bloom {
+    display: block;
+    position: absolute;
+    z-index: -1;
+    inset: -3px;
+    overflow: hidden;
+    border-radius: 21px;
+    filter: blur(var(--hero-halo-blur)) saturate(var(--hero-halo-saturate));
+    opacity: var(--hero-halo-opacity);
+    pointer-events: none;
+  }
+
+  .hero-bloom::before {
+    content: "";
+    position: absolute;
+    inset: -120%;
+    background: var(--hero-halo);
+    transform: rotate(0deg);
+    transform-origin: center;
+    will-change: transform;
+  }
+
+  /* 卡片内部用同一层底色盖住，只留边缘那圈光 */
+  .hero-bloom::after {
+    content: "";
+    position: absolute;
+    inset: 3px;
+    border-radius: 18px;
     background: var(--hero-card-fill);
   }
 
@@ -498,15 +593,15 @@ main { width: min(100%, 880px); margin-inline: auto; padding: 0 16px 32px; }
   content: "";
   position: absolute;
   z-index: -1;
-  inset: -18% -8% -28%;
-  border-radius: 28px;
+  inset: var(--hero-glow-inset);
+  border-radius: var(--hero-glow-radius);
   background: var(--hero-glow);
-  filter: blur(34px) saturate(115%);
-  opacity: 0.72;
+  filter: blur(var(--hero-glow-blur)) saturate(var(--hero-glow-saturate));
+  opacity: var(--hero-glow-opacity);
   pointer-events: none;
 }
 
-.hero > :not(.hero-ring) { position: relative; z-index: 3; }
+.hero > :not(.hero-ring):not(.hero-bloom) { position: relative; z-index: 3; }
 
 .hero-top { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .hero-label { color: var(--hero-muted); font-size: 13px; font-weight: 650; }
@@ -1382,6 +1477,7 @@ span[data-count-key] { display: inline-block; }
   .fab::after { display: none; }
   .hero { background: var(--hero); border-color: rgba(238, 104, 25, 0.82); -webkit-backdrop-filter: none; backdrop-filter: none; }
   .hero-ring,
+  .hero-bloom,
   .surface-ring { display: none; }
   .hero::after { display: none; }
 }
@@ -1391,6 +1487,7 @@ span[data-count-key] { display: inline-block; }
     animation: hero-enter 460ms cubic-bezier(0.22, 1, 0.36, 1) both;
   }
   .hero-ring::before,
+  .hero-bloom::before,
   .surface-ring::before { animation: hero-ring-spin 18s linear infinite; }
   .surface-ring-progress::before { animation-delay: -6s; }
   .surface-ring-breakdown::before { animation-delay: -12s; }
@@ -1400,7 +1497,8 @@ span[data-count-key] { display: inline-block; }
   .hero::after { animation: hero-breathe 6.4s ease-in-out infinite; }
   .hero:focus-visible,
   .hero:focus-visible::after,
-  .hero:focus-visible .hero-ring::before { animation-play-state: paused; }
+  .hero:focus-visible .hero-ring::before,
+  .hero:focus-visible .hero-bloom::before { animation-play-state: paused; }
   button.spring-release { animation: button-spring 360ms cubic-bezier(0.2, 0.9, 0.25, 1.2); }
   .number-ticking { animation: number-settle 520ms cubic-bezier(0.2, 0.82, 0.22, 1); }
   #listArea .number-ticking { animation: number-list-settle 420ms ease-out; }
