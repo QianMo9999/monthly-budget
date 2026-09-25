@@ -685,6 +685,7 @@ defineMorphIcon();
 
     if (!card.querySelector('.breakdown-head')) {
       card.innerHTML =
+        '<span class="surface-ring surface-ring-breakdown" aria-hidden="true"></span>' +
         '<div class="breakdown-head">' +
         '<div><div class="breakdown-title">余额明细</div>' +
         '<div class="breakdown-caption">看清每一笔钱怎么组成</div></div>' +
