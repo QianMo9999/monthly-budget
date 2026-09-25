@@ -1486,8 +1486,43 @@ span[data-count-key] { display: inline-block; }
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  main > .hero {
-    animation: hero-enter 460ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  /*
+   * 首屏入场：从上往下依次进场，只有刚打开那一次
+   * （html[data-intro="run"] 由 index.html 的脚本挂上、app.js 在一轮动画后摘掉，
+   *  这样切标签、改数据导致的重渲染不会又演一遍）
+   */
+  html[data-intro="run"] main > .hero {
+    animation: intro-hero 560ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  html[data-intro="run"] .banner:not(.hidden) {
+    animation: intro-rise 420ms 40ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  html[data-intro="run"] #statTiles:not(.hidden) {
+    animation: intro-rise 460ms 150ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  html[data-intro="run"] .summary-grid > :nth-child(1) {
+    animation: intro-rise 460ms 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  html[data-intro="run"] .summary-grid > :nth-child(2) {
+    animation: intro-rise 460ms 310ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  html[data-intro="run"] .tabs {
+    animation: intro-rise 440ms 390ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  html[data-intro="run"] #listArea > .section-title,
+  html[data-intro="run"] #listArea > .empty {
+    animation: intro-rise 440ms 460ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  html[data-intro="run"] #listArea .list > * {
+    animation: intro-rise 440ms 500ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  html[data-intro="run"] #listArea .list > :nth-child(2) { animation-delay: 545ms; }
+  html[data-intro="run"] #listArea .list > :nth-child(3) { animation-delay: 590ms; }
+  html[data-intro="run"] #listArea .list > :nth-child(4) { animation-delay: 635ms; }
+  html[data-intro="run"] #listArea .list > :nth-child(5) { animation-delay: 680ms; }
+  html[data-intro="run"] #listArea .list > :nth-child(n+6) { animation-delay: 725ms; }
+  html[data-intro="run"] .fab {
+    animation: intro-pop 520ms 640ms cubic-bezier(0.2, 0.9, 0.25, 1.25) both;
   }
   .hero-ring::before,
   .hero-bloom::before,
@@ -1496,7 +1531,6 @@ span[data-count-key] { display: inline-block; }
   .surface-ring-breakdown::before { animation-delay: -12s; }
   .hero-sub span:first-child strong,
   .row .amount.income { animation: income-gradient-flow 5.8s ease-in-out infinite alternate; }
-  main > .tiles { animation: overview-enter 520ms 70ms cubic-bezier(0.22, 1, 0.36, 1) both; }
   .hero::after { animation: hero-breathe 6.4s ease-in-out infinite; }
   .hero:focus-visible,
   .hero:focus-visible::after,
@@ -1507,14 +1541,19 @@ span[data-count-key] { display: inline-block; }
   #listArea .number-ticking { animation: number-list-settle 420ms ease-out; }
   .toast:not(.hidden) { animation: toast-enter 220ms cubic-bezier(0.22, 1, 0.36, 1) both; }
 
-  @keyframes hero-enter {
-    from { opacity: 0; transform: translateY(10px) scale(0.99); }
+  @keyframes intro-hero {
+    from { opacity: 0; transform: translateY(14px) scale(0.99); }
     to { opacity: 1; transform: translateY(0) scale(1); }
   }
 
-  @keyframes overview-enter {
-    from { opacity: 0; transform: translateY(8px); }
+  @keyframes intro-rise {
+    from { opacity: 0; transform: translateY(10px); }
     to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes intro-pop {
+    from { opacity: 0; transform: translateY(10px) scale(0.86); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
   }
 
   @keyframes hero-ring-spin {

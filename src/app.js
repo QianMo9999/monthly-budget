@@ -2583,6 +2583,13 @@ defineMorphIcon();
   applyTheme(document.documentElement.dataset.theme, false);
   render();
 
+  // 首屏入场只演一次：这轮动画跑完就把标记摘掉，
+  // 之后切标签、改数据触发的重渲染（列表整块重建）不会再重放一遍。
+  window.setTimeout(function () {
+    if (document.documentElement.dataset.intro !== 'run') return;
+    delete document.documentElement.dataset.intro;
+  }, 1400);
+
   // ---------------------------------------------------------------- 自检（?selftest=1）
 
   function runSelfTest() {

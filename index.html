@@ -16,6 +16,8 @@
         if (window.localStorage.getItem('monthly-budget-theme') === 'dark') theme = 'dark';
       } catch (error) {}
       document.documentElement.dataset.theme = theme;
+      // 首屏入场动画的开关：app.js 在这一轮动画跑完后摘掉，之后重渲染不再重放
+      document.documentElement.dataset.intro = 'run';
       if (theme === 'dark') {
         document.querySelector('meta[name="theme-color"]').content = '#111315';
         document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]').content = 'black-translucent';
