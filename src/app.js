@@ -1203,7 +1203,7 @@ defineMorphIcon();
         allowed: ['closed', 'compact', 'full'],
         initial: 'closed',
         animation: 'ios-spring',
-        settleAnimation: 'waapi',
+        settleAnimation: 'raf',
         spring: { stiffness: 360, damping: 38, mass: 1 },
         rubberBand: true,
         flickVelocity: 0.65,
