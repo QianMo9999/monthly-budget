@@ -95,6 +95,8 @@ defineMorphIcon();
   let tabIndicatorAnimation = null;
   let fabGlassFrame = 0;
   let hasRendered = false;
+  let serviceWorkerRegistration = null;
+  let updateCheckInFlight = false;
   const layoutAnimations = new Map();
   const numberFrames = new Map();
   const numberValues = new Map();
@@ -147,6 +149,8 @@ defineMorphIcon();
     archive: '<rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v11h14V9M10 13h4"/>',
     chart: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
     upload: '<path d="M12 16V4M7 9l5-5 5 5"/><path d="M5 14v6h14v-6"/>',
+    refresh: '<path d="M20 11a8 8 0 0 0-14.8-4L3 9"/><path d="M3 4v5h5M4 13a8 8 0 0 0 14.8 4L21 15"/><path d="M21 20v-5h-5"/>',
+    external: '<path d="M14 4h6v6M20 4l-9 9"/><path d="M18 13v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h6"/>',
     plus: '<path d="M12 5v14M5 12h14"/>',
     minus: '<path d="M5 12h14"/>',
     chevronLeft: '<path d="m15 18-6-6 6-6"/>',
@@ -392,6 +396,52 @@ defineMorphIcon();
     if (!('serviceWorker' in navigator)) return '当前浏览器不支持';
     if (!/^https?:$/.test(window.location.protocol)) return '用网页地址打开后会缓存';
     return navigator.serviceWorker.controller ? '已缓存，断网也能用' : '首次打开后自动缓存';
+  }
+
+  function appUrlForBrowser() {
+    const url = new URL(window.location.href);
+    url.search = '';
+    url.hash = '';
+    return url.href;
+  }
+
+  function openAppInBrowser() {
+    const url = appUrlForBrowser();
+    const opened = window.open(url, '_blank', 'noopener,noreferrer');
+    if (!opened) window.location.href = url;
+  }
+
+  function checkForAppUpdate() {
+    if (updateCheckInFlight) return;
+    if (!('serviceWorker' in navigator) || !/^https?:$/.test(window.location.protocol)) {
+      toast('请用 HTTPS 网页打开后再更新');
+      return;
+    }
+    updateCheckInFlight = true;
+    toast('正在检查更新…');
+    const registrationPromise = navigator.serviceWorker.getRegistration().then(function (registration) {
+      if (registration) return registration;
+      return navigator.serviceWorker.register('sw.js');
+    });
+    registrationPromise.then(function (registration) {
+      serviceWorkerRegistration = registration;
+      return registration.update().then(function () { return registration; });
+    }).then(function (registration) {
+      const installing = registration.installing;
+      if (installing) {
+        installing.addEventListener('statechange', function () {
+          if (installing.state === 'installed' && !navigator.serviceWorker.controller) {
+            toast('已缓存最新版，请重新打开桌面图标');
+          }
+        });
+      } else if (!registration.waiting) {
+        toast('已经是最新版');
+      }
+    }).catch(function () {
+      toast('在线更新失败，请点「在浏览器打开最新版」');
+    }).finally(function () {
+      updateCheckInFlight = false;
+    });
   }
 
   function backupAgeText(now) {
@@ -1889,6 +1939,10 @@ defineMorphIcon();
       '<div class="main"><div class="title">导出表格（CSV）</div><div class="sub">用 Excel / Numbers 打开</div></div></div>' +
       '<div class="row tappable" data-action="import-json"><div class="avatar">' + iconSvg('upload') + '</div>' +
       '<div class="main"><div class="title">导入备份</div><div class="sub">从 JSON 文件恢复数据</div></div></div>' +
+      '<div class="row tappable" data-action="check-update"><div class="avatar">' + iconSvg('refresh') + '</div>' +
+      '<div class="main"><div class="title">检查更新</div><div class="sub">在线检查最新版，桌面 App 会自动刷新</div></div></div>' +
+      '<div class="row tappable" data-action="open-browser"><div class="avatar">' + iconSvg('external') + '</div>' +
+      '<div class="main"><div class="title">在浏览器打开最新版</div><div class="sub">如果桌面 App 没有更新，用 Safari 打开当前网址</div></div></div>' +
       '</div>' +
       '<div class="sheet-actions">' +
       '<button class="btn danger" data-action="clear-data">清空数据</button>' +
@@ -2468,6 +2522,12 @@ defineMorphIcon();
         break;
       case 'import-json':
         $('import-file').click();
+        break;
+      case 'check-update':
+        checkForAppUpdate();
+        break;
+      case 'open-browser':
+        openAppInBrowser();
         break;
       case 'clear-data':
         if (window.confirm('确定清空全部数据吗？建议先导出备份。')) {
@@ -3138,7 +3198,9 @@ defineMorphIcon();
       window.location.reload();
     });
     window.addEventListener('load', function () {
-      navigator.serviceWorker.register('sw.js').catch(function () { /* 离线能力失败不影响使用 */ });
+      navigator.serviceWorker.register('sw.js').then(function (registration) {
+        serviceWorkerRegistration = registration;
+      }).catch(function () { /* 离线能力失败不影响使用 */ });
     });
   }
 
