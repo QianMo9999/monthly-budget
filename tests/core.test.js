@@ -113,10 +113,10 @@ test('结余：月收入 8000 的典型场景', () => {
   assert.equal(s.totalAvailable, 8500);
   assert.equal(s.actualBalance, 4840);
   assert.equal(s.committedBudget, 4510, "已经花掉的 3010 + 还要花的 1500；水电省下的 50 直接回结余");
-  assert.equal(s.plannedBalance, 3340, "收入+结转 8500 − 预算承诺 4510 − 零星 50 − 预支 600");
+  assert.equal(s.plannedBalance, 3940, "未来月份预支已付款：现金少 600，但本月结余不承担这笔钱");
   assert.equal(s.unspentBudget, 1500, "只有还没花的预算（餐饮 1500）");
   assert.equal(s.unspentBudget, s.remainingBudget, "未花预算 = 还没花掉的预算占用");
-  assert.equal(s.plannedBalance + s.unspentBudget, s.actualBalance, "结余 + 未花预算 = 实际剩余");
+  assert.equal(s.plannedBalance + s.unspentBudget - s.advanceFuturePaidTotal, s.actualBalance, "结余 + 未花预算 − 未来预支 = 实际剩余");
   assert.equal(s.budgetBalance, 1490);
   assert.equal(s.totalSpending, 3660);
   assert.equal(s.completedItemCount, 3);
@@ -372,10 +372,10 @@ test('示例数据：金额口径正确', () => {
   assert.equal(s.advanceOutstandingTotal, 700, '示例里提前买了下个月的车票');
   assert.equal(s.actualBalance, 2798);
   assert.equal(s.committedBudget, 6566, '已完成项目按实际（水电省 32、交通省 60 直接回结余）');
-  assert.equal(s.plannedBalance, 628);
+  assert.equal(s.plannedBalance, 1328);
   assert.equal(s.unspentBudget, 2170);
   assert.equal(s.unspentBudget, s.remainingBudget);
-  assert.equal(s.plannedBalance + s.unspentBudget, s.actualBalance);
+  assert.equal(s.plannedBalance + s.unspentBudget - s.advanceFuturePaidTotal, s.actualBalance);
   assert.equal(s.recurringCount, 1);
   assert.equal(s.recurringDailyTotal, 70);
   assert.equal(s.recurringRemainingTotal, 1050);
@@ -863,7 +863,7 @@ test('预支：本月买下个月的车票，钱从本月出、归属下个月',
   const march = store.summary(MARCH);
   assert.equal(march.advanceOutstandingTotal, 700);
   assert.equal(march.actualBalance, 7300, '本月手里的钱少了 700');
-  assert.equal(march.plannedBalance, 7300, '本月的可用结余也少了 700');
+  assert.equal(march.plannedBalance, 8000, '预支归属下个月，本月结余不减少');
   assert.equal(march.ledgerTotal, 0, '不算本月的零星支出');
   assert.equal(march.paidTotal, 0, '也不算本月的预算支出');
 
@@ -919,7 +919,7 @@ test('预支：付款日在未来时只占结余，不扣实际剩余', () => {
 
   const after = store.summary(MARCH, new Date(2026, 2, 21, 12));   // 付款日之后
   assert.equal(after.actualBalance, 7300, '过了付款日才真扣');
-  assert.equal(after.plannedBalance, 7300);
+  assert.equal(after.plannedBalance, 8000, '扣款后仍按目标月份承担，本月结余不减少');
   assert.equal(after.advancePaidTotal, 700);
   assert.equal(after.advanceReservedTotal, 0);
 });
@@ -990,7 +990,7 @@ test('预支：真的花了（9 月买了 10 月的车票）就当场扣实际�
 
   const march = store.summary(MARCH, now);
   assert.equal(march.actualBalance, 7300, '钱已经花掉 → 实际剩余减少');
-  assert.equal(march.plannedBalance, 7300);
+  assert.equal(march.plannedBalance, 8000, '现金少了，但本月结余按下个月预算处理');
   assert.equal(march.advancePaidTotal, 700);
   assert.equal(march.advanceReservedTotal, 0, '已经花掉的不用再预留');
 

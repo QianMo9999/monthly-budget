@@ -1079,8 +1079,9 @@ span[data-count-key] { display: inline-block; }
   z-index: 40;
   inset: 0;
   background: rgba(0, 0, 0, 0.38);
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
+  /* 模糊遮罩会在抽屉拖动的每一帧重绘底下整页，移动端明显掉帧。 */
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .backdrop:not(.hidden) { opacity: 1; pointer-events: auto; }
@@ -1107,6 +1108,17 @@ span[data-count-key] { display: inline-block; }
   -webkit-backface-visibility: hidden;
   backface-visibility: hidden;
   transform: translate3d(0, 0, 0);
+}
+
+/* 拖动/入场期间只保留必要的遮罩透明度，避免滤镜和大阴影参与逐帧绘制。 */
+.bs-root[data-dragging="true"] .backdrop,
+.bs-root[data-animating="true"] .backdrop {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.bs-root[data-dragging="true"] .sheet {
+  box-shadow: 0 160px 0 var(--sheet-fill);
 }
 
 @media (max-width: 699px) {

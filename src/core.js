@@ -14,7 +14,7 @@
   'use strict';
 
   /** App 版本号：改了功能就 +1，设置里能看到，用来确认线上是否已更新 */
-  const VERSION = 'v2.3.22';
+  const VERSION = 'v2.3.23';
 
   // ---------------------------------------------------------------- 金额
   // 内部一律按“分”做整数运算，避免 0.1 + 0.2 这类浮点误差。
@@ -688,6 +688,7 @@
     const carry = Money.round(carryOver || 0);
     const expenseEntries = entries.filter(function (e) { return e.direction !== 'income'; });
     const incomeEntries = entries.filter(function (e) { return e.direction === 'income'; });
+    const currentKey = month ? { year: month.year, month: month.month } : null;
 
     const plannedTotal = Money.sum(items.map(function (i) { return itemPlannedAmount(i, reference); }));
     const paidTotal = Money.sum(items.map(function (i) { return itemPaidAmount(i, reference); }));
@@ -700,9 +701,19 @@
     const advanceRepaidTotal = Money.sum(advances.map(function (a) { return a.repaidAmount; }));
     /* 本月登记的预支合计（含还没到扣款日的） */
     const advanceOutstandingTotal = Money.sum(advances.map(advanceOutstanding));
-    /* 已经真的付出去了（付款日已到）：扣实际剩余也扣结余 */
+    /* 已经真的付出去了（付款日已到）：先从实际剩余扣除；未来归属的部分稍后回拨到登记月结余。 */
     const advancePaidTotal = Money.sum(advances
       .filter(function (advance) { return advanceIsPaid(advance, reference); })
+      .map(advanceOutstanding));
+    /*
+     * 已经付掉、但归属未来月份的预支：现金确实从本月出去，
+     * 但这笔钱应由目标月份的预算承担，所以不减少登记月的结余。
+     */
+    const advanceFuturePaidTotal = Money.sum(advances
+      .filter(function (advance) {
+        return advanceIsPaid(advance, reference) && currentKey &&
+          Month.compare(advanceTargetKey(advance), currentKey) > 0;
+      })
       .map(advanceOutstanding));
     /*
      * 还没到扣款日：像计划中的预算 —— 只占结余、不扣实际剩余。
@@ -711,7 +722,6 @@
      *   9 月、10 月：实际剩余里还有这 500（钱没花），但结余里要减掉它（是留给 11 月的）；
      *   11 月（就是给它预留的那个月）：不再减了，这 500 直接算在 11 月的实际剩余里，等它真正扣款。
      */
-    const currentKey = month ? { year: month.year, month: month.month } : null;
     const isReservedForLaterMonth = function (advance) {
       if (advanceIsPaid(advance, reference)) return false;
       if (!currentKey) return false;
@@ -766,6 +776,7 @@
       advanceRepaidTotal: advanceRepaidTotal,
       advanceOutstandingTotal: advanceOutstandingTotal,
       advancePaidTotal: advancePaidTotal,
+      advanceFuturePaidTotal: advanceFuturePaidTotal,
       advanceReservedTotal: advanceReservedTotal,
       advanceReservedThisMonth: reservedThisMonth,
       /* 更早月份登记、至今还没到扣款日的预支（用于在归属月把它们列出来） */
@@ -821,11 +832,12 @@
     /** 还没花掉的预算（已经花掉的之外，还要占着的钱），主结余和实际剩余的差额就是它。 */
     summary.unspentBudget = Money.round(summary.committedBudget - paidTotal);
     /**
-     * 主结余只从实际剩余推导：先减跨月预支预留，再减当月未花预算。
+     * 主结余只从实际剩余推导：先减跨月预支预留，再减当月未花预算；
+     * 已付款但归属未来月份的预支回拨到登记月结余，交给目标月份预算承担。
      * 保持单一公式，避免新增余额来源后两套公式悄悄算出不同结果。
      */
     summary.plannedBalance = Money.round(
-      summary.actualBalance - advanceReservedTotal - summary.unspentBudget
+      summary.actualBalance - advanceReservedTotal - summary.unspentBudget + advanceFuturePaidTotal
     );
     summary.totalSpending = Money.round(paidTotal + ledgerTotal + advancePaidTotal);
     summary.budgetProgress = Math.min(1.5, Math.max(0, Money.ratio(paidTotal, plannedTotal)));

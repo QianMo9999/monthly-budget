@@ -680,6 +680,9 @@ defineMorphIcon();
       rows.push(line('advance-reserved', '减去预支待预留', -s.advanceReservedTotal, '留给后面月份，不算本月可花'));
     }
     rows.push(line('unspent-budget', '减去未花预算', -s.unspentBudget, '还没花掉但已经留出来的预算'));
+    if (s.advanceFuturePaidTotal > 0) {
+      rows.push(line('advance-future-paid', '未来月份预支回拨结余', s.advanceFuturePaidTotal, '现金已从本月出去，预算归属目标月份'));
+    }
     rows.push('<div class="stat-line total"><span class="k">结余（能自由安排的钱）</span>' +
       countElement('span', 'breakdown-planned-total', s.plannedBalance, 'money', '', '', 'v') + '</div>');
 
@@ -850,6 +853,14 @@ defineMorphIcon();
         '上月已提前支付',
         Money.format(s.advanceIncomingTotal),
         s.advanceIncomingCount + ' 笔 · 上个月已付过，本月不用再列预算',
+        ''
+      ));
+    }
+    if (s.advanceFuturePaidTotal > 0) {
+      tiles.push(tile(
+        '未来月份预支',
+        Money.format(s.advanceFuturePaidTotal),
+        '现金已付，本月结余交给目标月份预算',
         ''
       ));
     }
@@ -1204,7 +1215,8 @@ defineMorphIcon();
         allowed: ['closed', 'compact', 'full'],
         initial: 'closed',
         animation: 'ios-spring',
-        settleAnimation: 'raf',
+        // 结束拖动时交给浏览器的合成器做补间，避免主线程每帧重算抽屉位置。
+        settleAnimation: 'waapi',
         spring: { stiffness: 360, damping: 38, mass: 1 },
         rubberBand: true,
         flickVelocity: 0.65,
@@ -1771,24 +1783,20 @@ defineMorphIcon();
     const advance = advanceId ? store.advance(advanceId, currentKey) : null;
     const editing = !!advance;
     const target = advance ? core.advanceTargetKey(advance) : Month.next(currentKey);
-    // 新记录的扣款日默认落在归属月，而不是今天（否则会被当成"已经花了"）
-    const defaultDate = (function () {
-      const today = new Date();
-      const day = Math.min(today.getDate(), Month.dayCount(target));
-      return toDateInputValue(new Date(target.year, target.month - 1, day, 12).toISOString());
-    })();
+    // 新记录默认表示「今天已经买了」，归属月份仍然是下个月；需要预留时再改成未来扣款日。
+    const defaultDate = todayISO();
     const inputDate = advance ? toDateInputValue(advance.date) : defaultDate;
     const explicit = advance ? advance.paidOverride : null;
     const paidNow = explicit === null || explicit === undefined
       ? fromDateInputValue(inputDate) <= new Date().toISOString()
       : explicit;
     const paidHint = (explicit === null || explicit === undefined ? '按扣款日自动判断：' : '') + (paidNow
-      ? '已经花了 → 从本月实际剩余里扣掉（记到归属月时可以抵消）。'
+      ? '现金从本月实际剩余里扣掉，但本月结余按归属月预算处理。'
       : '还没花 → 本月实际剩余不动（钱还在卡里），只从结余里减掉，留到归属那月再花。');
     const html =
       '<h2>' + (editing ? '编辑预支' : '新增预支') + '</h2>' +
-      '<div class="hint" style="margin-bottom:12px">这个月买的、但属于下个月的开销（车票、学费、订阅…）：钱从本月出，' +
-      '付款日到了就从实际剩余里扣；还没到就只占结余（先预留）。归属月份会标注「上月已提前支付」，不会再扣一遍。</div>' +
+      '<div class="hint" style="margin-bottom:12px">这个月买的、但属于下个月的开销（车票、学费、订阅…）：现金从本月出，' +
+      '但本月结余按归属月份的预算计算；还没付款的只先占结余。归属月份会标注「上月已提前支付」，不会再扣一遍。</div>' +
       '<div class="field"><label>买了什么</label>' +
       '<input id="advance-title" type="text" placeholder="例如：下个月的车票" value="' + esc(advance ? advance.title : '') + '"></div>' +
       '<div class="field"><label>金额</label>' +
@@ -2241,7 +2249,7 @@ defineMorphIcon();
       const hint = $('paid-hint');
       if (hint) {
         hint.textContent = paid
-          ? '已经花了 → 从本月实际剩余里扣掉（记到归属月时可以抵消）。'
+          ? '现金从本月实际剩余里扣掉，但本月结余按归属月预算处理。'
           : '还没花 → 本月实际剩余不动（钱还在卡里），只从结余里减掉，留到归属那月再花。';
       }
       return;
@@ -2502,7 +2510,7 @@ defineMorphIcon();
         const hint = $('paid-hint');
         if (hint) {
           hint.textContent = '按扣款日自动判断：' + (paid
-            ? '已经花了 → 从本月实际剩余里扣掉（记到归属月时可以抵消）。'
+            ? '现金从本月实际剩余里扣掉，但本月结余按归属月预算处理。'
             : '还没花 → 本月实际剩余不动（钱还在卡里），只从结余里减掉，留到归属那月再花。');
         }
       }
@@ -2844,15 +2852,16 @@ defineMorphIcon();
           + withRecurring.advanceIncomingTotal
           - withRecurring.committedBudget - withRecurring.ledgerTotal
           - withRecurring.advancePaidTotal - withRecurring.advanceReservedTotal
+          + withRecurring.advanceFuturePaidTotal
         ));
       check('顶部结余显示扣完预算后的金额',
         $('heroValue').textContent === Money.format(withRecurring.plannedBalance),
         $('heroValue').textContent + ' vs ' + Money.format(withRecurring.plannedBalance));
-      check('结余 + 未花预算 + 预支待预留 = 实际剩余',
-        Money.cents(withRecurring.plannedBalance + withRecurring.unspentBudget + withRecurring.advanceReservedTotal)
+      check('结余 + 未花预算 + 预支待预留 − 未来预支 = 实际剩余',
+        Money.cents(withRecurring.plannedBalance + withRecurring.unspentBudget + withRecurring.advanceReservedTotal - withRecurring.advanceFuturePaidTotal)
           === Money.cents(withRecurring.actualBalance),
         Money.plain(withRecurring.plannedBalance) + ' + ' + Money.plain(withRecurring.unspentBudget) +
-        ' + ' + Money.plain(withRecurring.advanceReservedTotal) +
+        ' + ' + Money.plain(withRecurring.advanceReservedTotal) + ' − ' + Money.plain(withRecurring.advanceFuturePaidTotal) +
         ' vs ' + Money.plain(withRecurring.actualBalance));
 
       // —— 生活费每日结算 ——
@@ -2989,11 +2998,11 @@ defineMorphIcon();
         Money.plain(afterReconcile.plannedBalance) + ' vs ' + Money.plain(beforeReconcile.plannedBalance));
       check('顶部结余跟着变', $('heroValue').textContent === Money.format(afterReconcile.plannedBalance));
       check('概览出现「对账调整」卡片', $('statTiles').textContent.includes('对账调整'));
-      check('结余 + 未花预算 + 预支待预留 = 实际剩余（对账后仍成立）',
-        Money.cents(afterReconcile.plannedBalance + afterReconcile.unspentBudget + afterReconcile.advanceReservedTotal)
+      check('结余 + 未花预算 + 预支待预留 − 未来预支 = 实际剩余（对账后仍成立）',
+        Money.cents(afterReconcile.plannedBalance + afterReconcile.unspentBudget + afterReconcile.advanceReservedTotal - afterReconcile.advanceFuturePaidTotal)
           === Money.cents(afterReconcile.actualBalance),
         Money.plain(afterReconcile.plannedBalance) + ' + ' + Money.plain(afterReconcile.unspentBudget) +
-        ' + ' + Money.plain(afterReconcile.advanceReservedTotal) + ' vs ' + Money.plain(afterReconcile.actualBalance));
+        ' + ' + Money.plain(afterReconcile.advanceReservedTotal) + ' − ' + Money.plain(afterReconcile.advanceFuturePaidTotal) + ' vs ' + Money.plain(afterReconcile.actualBalance));
 
       $('breakdownCard').querySelector('[data-reconcile]').click();
       const secondRecord = store.reconcile(targetBalance, currentKey, '再对一次');
